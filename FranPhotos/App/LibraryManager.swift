@@ -12,6 +12,7 @@ final class LibraryManager {
     private(set) var parquetSync: ParquetSync?
     private(set) var timelineStore: TimelineStore?
     private(set) var albumsStore: AlbumsStore?
+    private(set) var searchStore: SearchStore?
 
     var importProgress = ImportProgress()
     var isImporting = false
@@ -69,6 +70,7 @@ final class LibraryManager {
         self.parquetSync = sync
         self.timelineStore = TimelineStore(sync: sync)
         self.albumsStore = AlbumsStore(db: dbActor, sync: sync)
+        self.searchStore = SearchStore(db: dbActor)
         self.errorMessage = nil
 
         // Background: validate parquet partitions against SQLite and repair stale ones.
@@ -89,6 +91,7 @@ final class LibraryManager {
         parquetSync = nil
         timelineStore = nil
         albumsStore = nil
+        searchStore = nil
     }
 
     func loadTimelineIndex() async {
