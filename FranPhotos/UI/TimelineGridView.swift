@@ -49,6 +49,9 @@ struct TimelineGridView: View {
                 .disabled(selection.isEmpty)
             }
         }
+        .onChange(of: selection) { _, newValue in
+            manager.selectedAssetUUIDs = newValue
+        }
         .overlay {
             if let previewAsset {
                 DetailView(initialAsset: previewAsset, paths: paths,

@@ -5,6 +5,7 @@ struct AssetGridView: View {
     let assets: [Asset]
     let cache: DerivativeCache
     @Binding var selection: Set<UUID>
+    @Environment(LibraryManager.self) private var manager
     var paths: LibraryPaths? = nil
     var cellSize: Double = 120
     var onOpen: ((Asset) -> Void)? = nil
@@ -50,6 +51,9 @@ struct AssetGridView: View {
                 }
             }
             .padding(2)
+        }
+        .onChange(of: selection) { _, newValue in
+            manager.selectedAssetUUIDs = newValue
         }
     }
 

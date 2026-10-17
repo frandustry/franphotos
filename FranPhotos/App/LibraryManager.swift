@@ -19,6 +19,11 @@ final class LibraryManager {
     var lastOutcome: ImportOutcome?
     var errorMessage: String?
 
+    /// Current grid selection, reported by the visible grid (drives File menu actions).
+    var selectedAssetUUIDs: Set<UUID> = []
+    var showExportSheet = false
+    var showBatchAdjustSheet = false
+
     private var importTask: Task<Void, Never>?
 
     var isLibraryOpen: Bool { library != nil }

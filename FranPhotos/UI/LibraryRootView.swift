@@ -132,6 +132,12 @@ struct LibraryRootView: View {
                 await manager.albumsStore?.createAlbum(name: name, rules: rules)
             }
         }
+        .sheet(isPresented: Bindable(manager).showExportSheet) {
+            ExportSheet(uuids: Array(manager.selectedAssetUUIDs))
+        }
+        .sheet(isPresented: Bindable(manager).showBatchAdjustSheet) {
+            BatchAdjustSheet(uuids: Array(manager.selectedAssetUUIDs))
+        }
         .task {
             await manager.loadTimelineIndex()
             await manager.albumsStore?.reload()
