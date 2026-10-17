@@ -18,6 +18,14 @@ struct FranPhotosApp: App {
             }
             .frame(minWidth: 900, minHeight: 600)
             .environment(manager)
+            .task {
+                // Development aid: `FRANPHOTOS_OPEN_LIBRARY=/path/to/x.franphotoslibrary`
+                // skips the welcome screen and opens that library directly.
+                guard !manager.isLibraryOpen,
+                      let path = ProcessInfo.processInfo.environment["FRANPHOTOS_OPEN_LIBRARY"],
+                      !path.isEmpty else { return }
+                manager.openLibraryOrReport(URL(fileURLWithPath: path), createIfMissing: false)
+            }
             .alert("Error", isPresented: Binding(
                 get: { manager.errorMessage != nil },
                 set: { if !$0 { manager.errorMessage = nil } }

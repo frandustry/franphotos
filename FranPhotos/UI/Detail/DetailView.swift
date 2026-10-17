@@ -17,7 +17,10 @@ struct DetailView: View {
     @State private var current: Asset
     @State private var showInfo = false
     @State private var isEditing = false
-    @State private var preloadedNeighbors: [UUID: Asset] = [:]
+    /// Prefetched neighbors: navigation uses them synchronously so paging is
+    /// instant, and their screen-size derivatives are warmed in the cache.
+    @State private var preloadedNext: Asset?
+    @State private var preloadedPrev: Asset?
 
     init(initialAsset: Asset, paths: LibraryPaths,
          nextAsset: @escaping @MainActor (Asset) async -> Asset?,
@@ -60,7 +63,7 @@ struct DetailView: View {
             if isEditing { isEditing = false } else { onClose() }
             return .handled
         }
-        .task(id: current.id) { preloadNeighbors() }
+        .task(id: current.id) { preloadNeighbors(of: current) }
     }
 
     // MARK: - Stage
@@ -70,54 +73,67 @@ struct DetailView: View {
             MediaStageView(
                 asset: current, paths: paths,
                 autoplay: false, muted: false, showsControls: true,
+                badgeTopInset: 60,  // clears the floating toolbar
                 onVideoFinished: { [autoAdvance] in
                     if autoAdvance { navigate(1) }
                 }
             )
             .id(current.id)  // rebuild stage when navigating
+            .transition(.opacity)
 
-            // Top toolbar
-            HStack {
-                Button(action: onClose) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .buttonStyle(.plain)
-                .keyboardShortcut(.cancelAction)
-                Spacer()
-                if current.mediaType == .photo {
-                    Button { isEditing = true } label: {
-                        Image(systemName: "slider.horizontal.3")
-                    }
-                    .buttonStyle(.plain)
-                    .help(String(localized: "Edit"))
-                }
-                Button { toggleFavorite() } label: {
-                    Image(systemName: current.isFavorite ? "heart.fill" : "heart")
-                        .foregroundStyle(current.isFavorite ? .red : .white)
-                }
-                .buttonStyle(.plain)
-                .help(String(localized: "Favorite"))
-                Button { showInfo.toggle() } label: {
-                    Image(systemName: "info.circle")
-                }
-                .buttonStyle(.plain)
-                .help(String(localized: "Info"))
-            }
-            .padding(12)
-            .foregroundStyle(.white)
-            .background(LinearGradient(colors: [.black.opacity(0.5), .clear],
-                                       startPoint: .top, endPoint: .bottom))
-
-            // Edge navigation
+            // Edge navigation — vertically centered, below the toolbar layer.
             HStack {
                 navButton(systemImage: "chevron.left", direction: -1)
                 Spacer()
                 navButton(systemImage: "chevron.right", direction: 1)
             }
-            .padding(.horizontal, 8)
+            .frame(maxHeight: .infinity)
+            .padding(.horizontal, 10)
+
+            // Top toolbar (last layer: always on top, always clickable).
+            HStack(spacing: 10) {
+                toolbarButton(systemName: "chevron.backward",
+                              help: String(localized: "Back"),
+                              action: onClose)
+                    .keyboardShortcut(.cancelAction)
+                Spacer()
+                if current.mediaType == .photo {
+                    toolbarButton(systemName: "slider.horizontal.3",
+                                  help: String(localized: "Edit")) {
+                        isEditing = true
+                    }
+                }
+                toolbarButton(
+                    systemName: current.isFavorite ? "heart.fill" : "heart",
+                    help: String(localized: "Favorite"),
+                    tint: current.isFavorite ? .red : nil
+                ) { toggleFavorite() }
+                toolbarButton(systemName: "info.circle",
+                              help: String(localized: "Info")) {
+                    showInfo.toggle()
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(LinearGradient(colors: [.black.opacity(0.55), .clear],
+                                       startPoint: .top, endPoint: .bottom)
+                            .allowsHitTesting(false))
         }
+    }
+
+    private func toolbarButton(systemName: String, help: String,
+                               tint: Color? = nil,
+                               action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(tint ?? .white)
+                .frame(width: 30, height: 30)
+                .background(.black.opacity(0.45), in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     private func navButton(systemImage: String, direction: Int) -> some View {
@@ -127,28 +143,52 @@ struct DetailView: View {
                 .padding(10)
                 .background(.black.opacity(0.35), in: Circle())
                 .foregroundStyle(.white)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .opacity(0.85)
     }
 
     // MARK: - Actions
 
+    /// Instant when the target neighbor was prefetched (the common case);
+    /// otherwise falls back to an async lookup.
     private func navigate(_ direction: Int) {
+        let preloaded = direction > 0 ? preloadedNext : preloadedPrev
+        if let preloaded {
+            preloadedNext = nil
+            preloadedPrev = nil
+            withAnimation(.easeInOut(duration: 0.15)) {
+                current = preloaded
+            }
+            return
+        }
         Task {
             let neighbor = direction > 0
                 ? await nextAsset(current)
                 : await previousAsset(current)
             guard let neighbor else { return }
-            current = preloadedNeighbors[neighbor.id] ?? neighbor
+            withAnimation(.easeInOut(duration: 0.15)) {
+                current = neighbor
+            }
         }
     }
 
-    private func preloadNeighbors() {
+    /// Prefetches both neighbor assets AND warms their screen-size derivatives,
+    /// so paging renders immediately instead of flashing a black placeholder.
+    private func preloadNeighbors(of origin: Asset) {
         Task {
-            async let next = nextAsset(current)
-            async let prev = previousAsset(current)
-            for candidate in [await next, await prev].compactMap({ $0 }) {
-                preloadedNeighbors[candidate.id] = candidate
+            async let next = nextAsset(origin)
+            async let prev = previousAsset(origin)
+            let (n, p) = await (next, prev)
+            // Discard if the user already navigated elsewhere meanwhile.
+            guard current.id == origin.id else { return }
+            preloadedNext = n
+            preloadedPrev = p
+            if let cache = manager.derivativeCache {
+                for candidate in [n, p].compactMap({ $0 }) {
+                    _ = await cache.image(for: candidate, size: .screen)
+                }
             }
         }
     }

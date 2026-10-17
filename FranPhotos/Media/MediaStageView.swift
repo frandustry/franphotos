@@ -12,6 +12,8 @@ struct MediaStageView: View {
     var showsControls: Bool = false
     /// LIVE badge top-left; hovering it (300 ms debounce) plays the live photo.
     var showsLiveBadge: Bool = true
+    /// Extra top inset for badges so they clear a hosting view's top toolbar.
+    var badgeTopInset: CGFloat = 12
     var onVideoFinished: (() -> Void)?
 
     @State private var controller: MediaStageController?
@@ -57,8 +59,7 @@ struct MediaStageView: View {
         VStack {
             HStack {
                 HStack(spacing: 4) {
-                    Image(systemName: controller.playbackState == .playing
-                          ? "livephoto" : "livephoto")
+                    Image(systemName: "livephoto")
                     Text("LIVE")
                 }
                 .font(.caption.weight(.bold))
@@ -66,7 +67,6 @@ struct MediaStageView: View {
                 .padding(.vertical, 4)
                 .background(.black.opacity(0.55), in: Capsule())
                 .foregroundStyle(.white)
-                .padding(12)
                 .contentShape(Rectangle())
                 .onHover { hovering in
                     liveHoverDebounce?.cancel()
@@ -88,9 +88,10 @@ struct MediaStageView: View {
                         .padding(.vertical, 4)
                         .background(.black.opacity(0.55), in: Capsule())
                         .foregroundStyle(.white)
-                        .padding(12)
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.top, badgeTopInset)
             Spacer()
         }
     }
@@ -108,14 +109,15 @@ struct MediaStageView: View {
     private func controlsOverlay(_ controller: MediaStageController) -> some View {
         VStack {
             Spacer()
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 Button {
                     controller.togglePlayPause()
                 } label: {
                     Image(systemName: controller.playbackState == .playing
                           ? "pause.fill" : "play.fill")
-                        .font(.title2)
-                        .frame(width: 28)
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 30, height: 22)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 Slider(
@@ -134,12 +136,16 @@ struct MediaStageView: View {
                     controller.isMuted.toggle()
                 } label: {
                     Image(systemName: controller.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        .frame(width: 24, height: 22)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
+            .padding(.vertical, 9)
+            .background(.ultraThinMaterial, in: Capsule())
+            .padding(.horizontal, 20)
+            .padding(.bottom, 14)
         }
     }
 }

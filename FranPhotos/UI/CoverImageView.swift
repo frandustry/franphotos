@@ -17,7 +17,7 @@ struct CoverImageView: View {
                     .foregroundStyle(.quaternary)
             }
             if let image {
-                Image(nsImage: image).resizable().scaledToFill()
+                Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
             }
         }
         .clipped()

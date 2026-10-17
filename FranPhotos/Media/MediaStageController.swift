@@ -45,6 +45,12 @@ final class MediaStageController {
         } else {
             stillTimeSeconds = 0
         }
+        // The import-time duration from the database is authoritative for the
+        // scrubber: AVPlayerItem.duration is .indefinite until the item finishes
+        // loading, so reading it eagerly produced a permanent "0:00".
+        if let ms = asset.durationMs {
+            duration = Double(ms) / 1000
+        }
     }
 
     var videoURL: URL? {
@@ -85,8 +91,11 @@ final class MediaStageController {
             let stillTime = CMTime(seconds: stillTimeSeconds, preferredTimescale: 600)
             _ = await player.currentItem?.seek(
                 to: stillTime, toleranceBefore: .zero, toleranceAfter: .zero)
-            if let item = player.currentItem {
-                duration = item.duration.seconds.isFinite ? item.duration.seconds : 0
+            // Refine the duration from the asset once it has really loaded.
+            if let item = player.currentItem,
+               let loaded = try? await item.asset.load(.duration),
+               loaded.seconds.isFinite, loaded.seconds > 0 {
+                duration = loaded.seconds
             }
             guard !Task.isCancelled else {
                 playbackState = .still
@@ -195,9 +204,6 @@ final class MediaStageController {
                 guard let self else { return }
                 self.currentTime = time.seconds.isFinite ? time.seconds : 0
             }
-        }
-        if let item = player.currentItem {
-            duration = item.duration.seconds.isFinite ? item.duration.seconds : 0
         }
     }
 

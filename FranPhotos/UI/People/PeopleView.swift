@@ -169,7 +169,7 @@ struct FaceThumbnail: View {
         ZStack {
             Circle().fill(Color.secondary.opacity(0.15))
             if let image {
-                Image(nsImage: image).resizable().scaledToFill()
+                Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
             } else {
                 Image(systemName: "person.fill").foregroundStyle(.tertiary)
             }

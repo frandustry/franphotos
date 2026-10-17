@@ -231,6 +231,16 @@
         }
       }
     },
+    "Back": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回"
+          }
+        }
+      }
+    },
     "Black Point": {
       "localizations": {
         "zh-Hans": {

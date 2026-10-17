@@ -94,7 +94,7 @@ private struct MemoryCard: View {
                 if let image {
                     Image(nsImage: image)
                         .resizable()
-                        .scaledToFill()
+                        .aspectRatio(contentMode: .fill)
                 }
             }
             .aspectRatio(4 / 3, contentMode: .fit)

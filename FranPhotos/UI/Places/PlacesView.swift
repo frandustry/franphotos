@@ -173,7 +173,7 @@ private struct MapThumbnailView: View {
             if let image {
                 Image(nsImage: image)
                     .resizable()
-                    .scaledToFill()
+                    .aspectRatio(contentMode: .fill)
             }
         }
         .clipped()

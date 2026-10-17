@@ -53,9 +53,12 @@ struct AssetThumbnailView: View {
         ZStack {
             placeholder
             if let image {
+                // NOTE: .scaledToFill() leaks the image's natural size through
+                // fixed frames on this SDK (proven with a standalone harness);
+                // the explicit .aspectRatio(contentMode:) form does not.
                 Image(nsImage: image)
                     .resizable()
-                    .scaledToFill()
+                    .aspectRatio(contentMode: .fill)
             }
             if let controller, controller.hasVideo {
                 VideoLayerView(player: controller.player)
