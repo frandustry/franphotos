@@ -2,6 +2,7 @@ import SwiftUI
 
 enum SidebarItem: Hashable {
     case section(LibrarySection)
+    case album(UUID)
 
     enum LibrarySection: String, CaseIterable {
         case photos, videos, livePhotos, favorites
@@ -31,6 +32,9 @@ struct LibraryRootView: View {
     @Environment(LibraryManager.self) private var manager
     @State private var selection: SidebarItem = .section(.photos)
     @State private var isTargetedForDrop = false
+    @State private var showNewAlbumSheet = false
+    @State private var showSmartAlbumSheet = false
+    @State private var newAlbumName = ""
 
     var body: some View {
         NavigationSplitView {
@@ -39,6 +43,36 @@ struct LibraryRootView: View {
                     ForEach(SidebarItem.LibrarySection.allCases, id: \.self) { section in
                         Label(section.localizedName, systemImage: section.systemImage)
                             .tag(SidebarItem.section(section))
+                    }
+                }
+                Section {
+                    ForEach(manager.albumsStore?.albums ?? []) { album in
+                        Label(album.name,
+                              systemImage: album.type == .smart ? "gearshape" : "rectangle.stack")
+                            .tag(SidebarItem.album(album.uuid))
+                            .dropDestination(for: String.self) { payloads, _ in
+                                handleAssetDrop(payloads, onto: album.uuid)
+                            }
+                            .contextMenu {
+                                Button(String(localized: "Delete Album"), role: .destructive) {
+                                    Task { await manager.albumsStore?.delete(album.uuid) }
+                                }
+                            }
+                    }
+                } header: {
+                    HStack {
+                        Text("My Albums")
+                        Spacer()
+                        Menu {
+                            Button(String(localized: "New Album")) { showNewAlbumSheet = true }
+                            Button(String(localized: "New Smart Album…")) {
+                                showSmartAlbumSheet = true
+                            }
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .menuStyle(.borderlessButton)
+                        .frame(width: 20)
                     }
                 }
             }
@@ -51,9 +85,45 @@ struct LibraryRootView: View {
                     handleDrop(providers)
                 }
         }
+        .sheet(isPresented: $showNewAlbumSheet) {
+            newAlbumSheet
+        }
+        .sheet(isPresented: $showSmartAlbumSheet) {
+            SmartAlbumEditorView { name, rules in
+                await manager.albumsStore?.createAlbum(name: name, rules: rules)
+            }
+        }
         .task {
             await manager.loadTimelineIndex()
+            await manager.albumsStore?.reload()
         }
+    }
+
+    private var newAlbumSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("New Album").font(.headline)
+            TextField(String(localized: "Album Name"), text: $newAlbumName)
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Spacer()
+                Button(String(localized: "Cancel")) {
+                    showNewAlbumSheet = false
+                    newAlbumName = ""
+                }
+                Button(String(localized: "Create")) {
+                    let name = newAlbumName.trimmingCharacters(in: .whitespaces)
+                    Task {
+                        _ = await manager.albumsStore?.createAlbum(
+                            name: name.isEmpty ? String(localized: "Untitled Album") : name)
+                        newAlbumName = ""
+                        showNewAlbumSheet = false
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(20)
+        .frame(width: 320)
     }
 
     @ViewBuilder
@@ -72,6 +142,9 @@ struct LibraryRootView: View {
             case .section(.favorites):
                 FilteredAssetGridView(cache: cache, db: db, paths: paths,
                                       filter: .init(kind: .favorites))
+            case .album(let uuid):
+                FilteredAssetGridView(cache: cache, db: db, paths: paths,
+                                      filter: .init(kind: .album(uuid)))
             }
         } else {
             ProgressView()
@@ -107,6 +180,17 @@ struct LibraryRootView: View {
         }
         group.notify(queue: .main) {
             manager.importFiles(urls)
+        }
+        return true
+    }
+
+    /// Grid cells drag comma-separated UUID strings; dropping onto an album adds them.
+    private func handleAssetDrop(_ payloads: [String], onto albumUUID: UUID) -> Bool {
+        let uuids = payloads.flatMap { $0.split(separator: ",") }
+            .compactMap { UUID(uuidString: String($0)) }
+        guard !uuids.isEmpty else { return false }
+        Task {
+            await manager.albumsStore?.add(uuids, to: albumUUID)
         }
         return true
     }

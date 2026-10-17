@@ -226,6 +226,73 @@ actor ParquetSync {
         return try await fetchMonthAssets(key)
     }
 
+    // MARK: - Album partitions
+
+    private var dirtyAlbums: Set<UUID> = []
+
+    func markAlbumDirty(_ uuid: UUID) async {
+        dirtyAlbums.insert(uuid)
+    }
+
+    /// Regenerates all dirty album partitions + the albums index.
+    func syncAlbums() async throws {
+        let bridge = try requireBridge()
+        let albums = dirtyAlbums
+        dirtyAlbums.removeAll()
+        for uuid in albums {
+            try await regenerateAlbum(uuid, bridge: bridge)
+        }
+        try await rewriteAlbumsIndex(bridge: bridge)
+    }
+
+    private func regenerateAlbum(_ uuid: UUID, bridge: ParquetBridge) async throws {
+        let store = AlbumStore(db: db)
+        let url = paths.albumsParquetDirectory.appending(path: "\(uuid.uuidString).parquet")
+        guard try await store.album(uuid) != nil else {
+            try? FileManager.default.removeItem(at: url)
+            try await db.execute("DELETE FROM partition_checksums WHERE partition_key = ?",
+                                 [.text("album:\(uuid.uuidString)")])
+            return
+        }
+        let assets = try await store.assets(in: uuid)
+        let rows = assets.enumerated().map { index, asset in
+            ParquetRowCodec.row(from: asset, albumSortIndex: Int32(index))
+        }
+        let result = try await bridge.writePartition(path: url, kind: .asset, rows: rows)
+        let hash = contentHash(of: assets)
+        try await db.execute("""
+            INSERT INTO partition_checksums (partition_key, kind, row_count, sha256, regenerated_at)
+            VALUES (?, 'album', ?, ?, ?)
+            ON CONFLICT(partition_key) DO UPDATE SET
+                row_count = excluded.row_count,
+                sha256 = excluded.sha256,
+                regenerated_at = excluded.regenerated_at
+            """, [.text("album:\(uuid.uuidString)"), .integer(Int64(result.rows)),
+                  .text(hash), .date(Date())])
+    }
+
+    private func rewriteAlbumsIndex(bridge: ParquetBridge) async throws {
+        let store = AlbumStore(db: db)
+        let albums = try await store.albums()
+        var rows: [[String: JSONValue]] = []
+        for album in albums {
+            let count = try await store.assetCount(in: album.uuid)
+            let sha = try await db.query(
+                "SELECT sha256 FROM partition_checksums WHERE partition_key = ?",
+                [.text("album:\(album.uuid.uuidString)")]).first?.text("sha256") ?? ""
+            rows.append([
+                "album_uuid": .string(album.uuid.uuidString),
+                "name": .string(album.name),
+                "album_type": .string(album.type.rawValue),
+                "row_count": .int(Int64(count)),
+                "cover_uuid": .string(album.coverAssetUUID?.uuidString ?? ""),
+                "sha256": .string(sha),
+            ])
+        }
+        try await bridge.writePartition(path: paths.albumsIndexParquet,
+                                        kind: .albumIndex, rows: rows)
+    }
+
     // MARK: - DB helpers
 
     private func fetchMonthAssets(_ key: MonthKey) async throws -> [Asset] {

@@ -25,6 +25,11 @@ struct AssetGridView: View {
                                 .stroke(selection.contains(asset.id)
                                         ? Color.accentColor : Color.clear, lineWidth: 2)
                         )
+                        .draggable(dragPayload(for: asset))
+                        .contextMenu {
+                            AssetContextMenu(assetUUIDs: selection.contains(asset.id)
+                                             ? Array(selection) : [asset.id])
+                        }
                         .onTapGesture(count: 2) {
                             selection = [asset.id]
                             onOpen?(asset)
@@ -44,5 +49,11 @@ struct AssetGridView: View {
             }
             .padding(2)
         }
+    }
+
+    /// Dragging a selected cell drags the whole selection; otherwise just the cell.
+    private func dragPayload(for asset: Asset) -> String {
+        let uuids = selection.contains(asset.id) ? Array(selection) : [asset.id]
+        return uuids.map(\.uuidString).joined(separator: ",")
     }
 }
