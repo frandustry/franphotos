@@ -60,6 +60,7 @@ struct FilteredAssetGridView: View {
     let filter: FilteredAssetStore.Filter
     @State private var store: FilteredAssetStore?
     @State private var selection = Set<UUID>()
+    @State private var previewAsset: Asset?
 
     var body: some View {
         Group {
@@ -71,11 +72,15 @@ struct FilteredAssetGridView: View {
                         description: Text("Items matching this view will appear here.")
                     )
                 } else {
-                    AssetGridView(assets: store.assets, cache: cache, selection: $selection)
+                    AssetGridView(assets: store.assets, cache: cache, selection: $selection,
+                                  onOpen: { previewAsset = $0 })
                 }
             } else {
                 ProgressView()
             }
+        }
+        .sheet(item: $previewAsset) { asset in
+            AssetPreviewSheet(asset: asset)
         }
         .task {
             let store = FilteredAssetStore(filter: filter, db: db)

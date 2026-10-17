@@ -82,6 +82,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = FA0000000000000000000013 /* Build configuration list for PBXNativeTarget "FranPhotos" */;
 			buildPhases = (
+				FA000000000000000000001D /* Build fpparquet helper */,
 				FA000000000000000000000A /* Sources */,
 				FA000000000000000000000B /* Frameworks */,
 				FA000000000000000000000C /* Resources */,
@@ -179,6 +180,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		FA000000000000000000001D /* Build fpparquet helper */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Build fpparquet helper";
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/bin/fpparquet",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "\"$SRCROOT/scripts/build-go-helper.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		FA000000000000000000000A /* Sources */ = {

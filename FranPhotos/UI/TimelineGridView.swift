@@ -9,6 +9,7 @@ struct TimelineGridView: View {
 
     @State private var selection = Set<UUID>()
     @State private var cellSize: Double = 120
+    @State private var previewAsset: Asset?
 
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: cellSize, maximum: cellSize * 1.4), spacing: 2)]
@@ -37,6 +38,9 @@ struct TimelineGridView: View {
                     .frame(width: 140)
                     .help(String(localized: "Thumbnail size"))
             }
+        }
+        .sheet(item: $previewAsset) { asset in
+            AssetPreviewSheet(asset: asset)
         }
     }
 
@@ -83,7 +87,8 @@ struct TimelineGridView: View {
                 ForEach(timeline.months) { month in
                     MonthSliceSection(timeline: timeline, monthKey: month.key,
                                       cache: cache, selection: $selection, cellSize: cellSize,
-                                      groupByDay: true)
+                                      groupByDay: true,
+                                      onOpen: { previewAsset = $0 })
                 }
             }
             .padding(2)
@@ -98,7 +103,8 @@ struct TimelineGridView: View {
                 ForEach(timeline.months) { month in
                     MonthSliceSection(timeline: timeline, monthKey: month.key,
                                       cache: cache, selection: $selection, cellSize: cellSize,
-                                      groupByDay: false)
+                                      groupByDay: false,
+                                      onOpen: { previewAsset = $0 })
                 }
             }
             .padding(2)
@@ -115,6 +121,7 @@ private struct MonthSliceSection: View {
     @Binding var selection: Set<UUID>
     let cellSize: Double
     let groupByDay: Bool
+    var onOpen: ((Asset) -> Void)? = nil
 
     private var slice: MonthSlice { timeline.slice(for: monthKey) }
 
@@ -167,6 +174,10 @@ private struct MonthSliceSection: View {
             AssetThumbnailView(asset: asset, cache: cache)
                 .overlay(selection.contains(asset.id)
                          ? Color.accentColor.opacity(0.25) : Color.clear)
+                .onTapGesture(count: 2) {
+                    selection = [asset.id]
+                    onOpen?(asset)
+                }
                 .onTapGesture {
                     if NSEvent.modifierFlags.contains(.command) {
                         if selection.contains(asset.id) {
