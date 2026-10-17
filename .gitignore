@@ -16,3 +16,4 @@ FranPhotos.app
 # Go
 go/fpparquet/fpparquet
 go/fpparquet/bin/
+*.profraw

@@ -167,21 +167,6 @@ struct Album: Sendable, Equatable, Identifiable {
     var coverAssetUUID: UUID?
 
     var id: UUID { uuid }
-
-    /// Built-in album identifiers (stable, referenced from code).
-    enum Builtin: String, CaseIterable, Sendable {
-        case favorites = "builtin:favorites"
-        case videos = "builtin:videos"
-        case livePhotos = "builtin:livephotos"
-        case screenshots = "builtin:screenshots"
-        case recentlyImported = "builtin:recently_imported"
-
-        var uuidString: String { "00000000-0000-0000-0000-\(String(format: "%012d", index))" }
-
-        private var index: Int {
-            Self.allCases.firstIndex(of: self)! + 1
-        }
-    }
 }
 
 struct Keyword: Sendable, Equatable, Identifiable {
