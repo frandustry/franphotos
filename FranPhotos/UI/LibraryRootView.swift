@@ -42,13 +42,13 @@ enum SidebarItem: Hashable {
 
         var systemImage: String {
             switch self {
-            case .photos: "photo.stack"
+            case .photos: "photo.on.rectangle.angled"
             case .videos: "video"
             case .livePhotos: "livephoto"
             case .favorites: "heart"
             case .places: "map"
             case .memories: "sparkles.rectangle.stack"
-            case .people: "person.2"
+            case .people: "person.crop.rectangle.stack"
             }
         }
     }

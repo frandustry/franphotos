@@ -10,12 +10,16 @@ struct TimelineGridView: View {
 
     @State private var selection = Set<UUID>()
     @State private var cellSize: Double = 120
+    /// Live value while the zoom slider is being dragged; `cellSize` (which the
+    /// grid actually lays out with) is only committed when the drag ends, so a
+    /// drag doesn't relayout the entire lazy grid on every pixel.
+    @State private var draftCellSize: Double = 120
     @State private var previewAsset: Asset?
     @State private var slideshowAssets: [Asset]?
     @Environment(LibraryManager.self) private var manager
 
     private var columns: [GridItem] {
-        [GridItem(.adaptive(minimum: cellSize, maximum: cellSize * 1.4), spacing: 2)]
+        [GridItem(.adaptive(minimum: cellSize, maximum: cellSize * 1.4), spacing: 4)]
     }
 
     var body: some View {
@@ -35,11 +39,23 @@ struct TimelineGridView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .frame(width: 320)
             }
             ToolbarItem {
-                Slider(value: $cellSize, in: 64...240)
-                    .frame(width: 140)
-                    .help(String(localized: "Thumbnail size"))
+                HStack(spacing: 6) {
+                    Image(systemName: "photo")
+                        .font(.system(size: 9))
+                    Slider(value: $draftCellSize, in: 64...240) { editing in
+                        if !editing {
+                            cellSize = draftCellSize.rounded()
+                        }
+                    }
+                    .frame(width: 120)
+                    Image(systemName: "photo")
+                        .font(.system(size: 16))
+                }
+                .foregroundStyle(.secondary)
+                .help(String(localized: "Thumbnail size"))
             }
             ToolbarItem {
                 Button { startSlideshow() } label: {
@@ -72,7 +88,7 @@ struct TimelineGridView: View {
 
     private var yearsGrid: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 16)], spacing: 16) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 20)], spacing: 20) {
                 ForEach(timeline.years) { year in
                     SummaryCard(
                         title: String(year.year),
@@ -82,7 +98,7 @@ struct TimelineGridView: View {
                     .onTapGesture { /* drill-in arrives with navigation polish */ }
                 }
             }
-            .padding(16)
+            .padding(20)
         }
     }
 
@@ -90,7 +106,7 @@ struct TimelineGridView: View {
 
     private var monthsGrid: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 16)], spacing: 16) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 20)], spacing: 20) {
                 ForEach(timeline.months) { month in
                     SummaryCard(
                         title: month.key.displayName,
@@ -99,7 +115,7 @@ struct TimelineGridView: View {
                     )
                 }
             }
-            .padding(16)
+            .padding(20)
         }
     }
 
@@ -107,16 +123,16 @@ struct TimelineGridView: View {
 
     private var daysGrid: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 2, pinnedViews: [.sectionHeaders]) {
+            LazyVGrid(columns: columns, spacing: 4, pinnedViews: [.sectionHeaders]) {
                 ForEach(timeline.months) { month in
                     MonthSliceSection(timeline: timeline, monthKey: month.key,
-                                      cache: cache, paths: paths, selection: $selection, cellSize: cellSize,
+                                      cache: cache, paths: paths, selection: $selection,
                                       groupByDay: true,
                                       onOpen: { previewAsset = $0 },
                                       onPlaySlideshow: startSlideshow(uuids:))
                 }
             }
-            .padding(2)
+            .padding(4)
         }
     }
 
@@ -124,16 +140,16 @@ struct TimelineGridView: View {
 
     private var allPhotosGrid: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 2, pinnedViews: [.sectionHeaders]) {
+            LazyVGrid(columns: columns, spacing: 4, pinnedViews: [.sectionHeaders]) {
                 ForEach(timeline.months) { month in
                     MonthSliceSection(timeline: timeline, monthKey: month.key,
-                                      cache: cache, paths: paths, selection: $selection, cellSize: cellSize,
+                                      cache: cache, paths: paths, selection: $selection,
                                       groupByDay: false,
                                       onOpen: { previewAsset = $0 },
                                       onPlaySlideshow: startSlideshow(uuids:))
                 }
             }
-            .padding(2)
+            .padding(4)
         }
     }
 
@@ -159,7 +175,6 @@ private struct MonthSliceSection: View {
     let cache: DerivativeCache
     let paths: LibraryPaths
     @Binding var selection: Set<UUID>
-    let cellSize: Double
     let groupByDay: Bool
     var onOpen: ((Asset) -> Void)? = nil
     var onPlaySlideshow: (([UUID]) -> Void)? = nil
@@ -174,18 +189,22 @@ private struct MonthSliceSection: View {
                 assetCells(slice.assets)
             }
         } header: {
-            HStack {
-                Text(monthKey.displayName).font(.headline)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(monthKey.displayName)
+                    .font(.title3.bold())
                 if slice.isLoading {
                     ProgressView().controlSize(.small)
                 }
                 Spacer()
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
             .background(.bar)
         }
-        .task(id: monthKey) {
+        // The reload token restarts loading when the slice was evicted from the
+        // store's LRU pool while its section stayed on screen.
+        .task(id: "\(monthKey.description)#\(slice.reloadToken)") {
             await timeline.ensureLoaded(monthKey)
         }
     }
@@ -213,8 +232,12 @@ private struct MonthSliceSection: View {
     private func assetCells(_ assets: [Asset]) -> some View {
         ForEach(assets) { asset in
             AssetThumbnailView(asset: asset, cache: cache, paths: paths)
-                .overlay(selection.contains(asset.id)
-                         ? Color.accentColor.opacity(0.25) : Color.clear)
+                .overlay {
+                    if selection.contains(asset.id) {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(Color.accentColor, lineWidth: 3)
+                    }
+                }
                 .draggable(dragPayload(for: asset))
                 .contextMenu {
                     AssetContextMenu(assetUUIDs: selection.contains(asset.id)
@@ -257,7 +280,12 @@ private struct SummaryCard: View {
         VStack(alignment: .leading, spacing: 6) {
             CoverImageView(assetUUID: coverUUID, db: db, cache: cache)
                 .aspectRatio(4 / 3, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(.quaternary, lineWidth: 0.5)
+                }
+                .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
             Text(title).font(.headline)
             Text(subtitle).font(.caption).foregroundStyle(.secondary)
         }

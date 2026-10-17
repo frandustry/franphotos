@@ -36,14 +36,41 @@ struct MonthKey: Sendable, Hashable, Comparable, CustomStringConvertible {
     static func descending(_ a: MonthKey, _ b: MonthKey) -> Bool { b < a }
 
     /// Localized display name like "March 2025" / "2025年3月".
+    ///
+    /// Creating a DateFormatter is extremely expensive (ICU `udat_open` showed
+    /// up as the heaviest stack in a hang trace: every grid re-render called
+    /// this getter once per section header), so results are memoized per key
+    /// and invalidated when the locale changes.
     var displayName: String {
-        var comps = DateComponents()
-        comps.year = year
-        comps.month = month
-        let date = Calendar(identifier: .gregorian).date(from: comps) ?? Date()
-        let fmt = DateFormatter()
-        fmt.dateFormat = DateFormatter.dateFormat(fromTemplate: "yyyyMMMM", options: 0,
-                                                  locale: .current)
-        return fmt.string(from: date)
+        Self.displayNameCache.value(for: self)
+    }
+
+    private static let displayNameCache = DisplayNameCache()
+
+    private final class DisplayNameCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var values: [MonthKey: String] = [:]
+        private var localeID: String = ""
+
+        func value(for key: MonthKey) -> String {
+            lock.lock()
+            defer { lock.unlock() }
+            let currentLocaleID = Locale.current.identifier
+            if currentLocaleID != localeID {
+                values.removeAll()
+                localeID = currentLocaleID
+            }
+            if let cached = values[key] { return cached }
+            var comps = DateComponents()
+            comps.year = key.year
+            comps.month = key.month
+            let date = Calendar(identifier: .gregorian).date(from: comps) ?? Date()
+            let fmt = DateFormatter()
+            fmt.dateFormat = DateFormatter.dateFormat(fromTemplate: "yyyyMMMM", options: 0,
+                                                      locale: .current)
+            let name = fmt.string(from: date)
+            values[key] = name
+            return name
+        }
     }
 }

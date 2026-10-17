@@ -12,21 +12,20 @@ struct AssetGridView: View {
     var onPlaySlideshow: (([UUID]) -> Void)? = nil
 
     private var columns: [GridItem] {
-        [GridItem(.adaptive(minimum: cellSize, maximum: cellSize * 1.4), spacing: 2)]
+        [GridItem(.adaptive(minimum: cellSize, maximum: cellSize * 1.4), spacing: 4)]
     }
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 2) {
+            LazyVGrid(columns: columns, spacing: 4) {
                 ForEach(assets) { asset in
                     AssetThumbnailView(asset: asset, cache: cache, paths: paths)
-                        .overlay(selection.contains(asset.id)
-                                 ? Color.accentColor.opacity(0.25) : Color.clear)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 2)
-                                .stroke(selection.contains(asset.id)
-                                        ? Color.accentColor : Color.clear, lineWidth: 2)
-                        )
+                        .overlay {
+                            if selection.contains(asset.id) {
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .strokeBorder(Color.accentColor, lineWidth: 3)
+                            }
+                        }
                         .draggable(dragPayload(for: asset))
                         .contextMenu {
                             AssetContextMenu(assetUUIDs: selection.contains(asset.id)
@@ -50,7 +49,7 @@ struct AssetGridView: View {
                         }
                 }
             }
-            .padding(2)
+            .padding(4)
         }
         .onChange(of: selection) { _, newValue in
             manager.selectedAssetUUIDs = newValue

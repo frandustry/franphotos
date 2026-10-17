@@ -10,16 +10,20 @@ struct CoverImageView: View {
     @State private var image: NSImage?
 
     var body: some View {
-        Rectangle().fill(Color.secondary.opacity(0.12))
-            .overlay {
-                if let image {
-                    Image(nsImage: image).resizable().scaledToFill()
-                }
+        ZStack {
+            Color.secondary.opacity(0.08)
+            if image == nil {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .foregroundStyle(.quaternary)
             }
-            .clipped()
-            .task(id: assetUUID) {
-                await load()
+            if let image {
+                Image(nsImage: image).resizable().scaledToFill()
             }
+        }
+        .clipped()
+        .task(id: assetUUID) {
+            await load()
+        }
     }
 
     private func load() async {

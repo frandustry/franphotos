@@ -10,8 +10,14 @@ final class MonthSlice: Identifiable {
     var assets: [Asset] = []
     var isLoaded = false
     var isLoading = false
+    /// Bumped (store-wide monotonic) whenever the slice is evicted/recreated, so
+    /// views keyed on it restart their load task instead of showing stale emptiness.
+    var reloadToken: Int
 
-    init(key: MonthKey) { self.key = key }
+    init(key: MonthKey, reloadToken: Int) {
+        self.key = key
+        self.reloadToken = reloadToken
+    }
 
     nonisolated var id: String { key.description }
 
@@ -34,6 +40,13 @@ final class MonthSlice: Identifiable {
 
 /// Timeline presentation model: month index (from `_index.parquet` via ParquetSync)
 /// plus an LRU pool of loaded month slices — at most `maxHotSlices` stay in memory.
+///
+/// Important: `slice(for:)` never mutates anything. Mutating observed state from
+/// a view-body read (the old LRU "touch" did exactly that, and evicted after just
+/// 3 hot slices) put SwiftUI's AttributeGraph into a perpetual invalidation loop
+/// and hung the app whenever more than a few month sections were on screen. All
+/// LRU bookkeeping happens in `ensureLoaded`, i.e. from async work, never during
+/// view evaluation.
 @MainActor
 @Observable
 final class TimelineStore {
@@ -70,8 +83,12 @@ final class TimelineStore {
     var zoom: Zoom = .allPhotos
 
     private var slices: [MonthKey: MonthSlice] = [:]
-    private var hotOrder: [MonthKey] = []  // most-recently-used last
-    let maxHotSlices = 3
+    /// Loaded slice keys, most-recently-used last. Only mutated by `ensureLoaded`.
+    private var hotOrder: [MonthKey] = []
+    /// A screen can easily show 6–10 month sections at small thumbnail sizes.
+    let maxHotSlices = 12
+
+    private var reloadTokenCounter = 0
 
     private let sync: ParquetSync
 
@@ -86,6 +103,11 @@ final class TimelineStore {
             MonthSummary(key: MonthKey(parsing: entry.month) ?? MonthKey(year: 1970, month: 1),
                          count: entry.rowCount,
                          coverUUID: UUID(uuidString: entry.coverUUID))
+        }
+        // Pre-create slice objects so view bodies never trigger a dictionary
+        // mutation via `slice(for:)` — reads must stay side-effect free.
+        for month in months where slices[month.key] == nil {
+            slices[month.key] = MonthSlice(key: month.key, reloadToken: nextReloadToken())
         }
         var yearMap: [Int: (monthCount: Int, assetCount: Int, cover: UUID?)] = [:]
         for m in months {
@@ -102,14 +124,14 @@ final class TimelineStore {
         }
     }
 
+    /// Pure lookup (plus a defensive create for keys missing from the index).
+    /// Deliberately does NOT touch LRU state — see the type's doc comment.
     func slice(for key: MonthKey) -> MonthSlice {
         if let existing = slices[key] {
-            touch(key)
             return existing
         }
-        let slice = MonthSlice(key: key)
+        let slice = MonthSlice(key: key, reloadToken: nextReloadToken())
         slices[key] = slice
-        touch(key)
         return slice
     }
 
@@ -123,6 +145,7 @@ final class TimelineStore {
             // Never show hidden/deleted in the main timeline.
             slice.assets = assets.filter { !$0.isHidden && !$0.isDeleted }
             slice.isLoaded = true
+            markRecentlyUsed(key)
         }
     }
 
@@ -174,12 +197,33 @@ final class TimelineStore {
 
     // MARK: - LRU
 
-    private func touch(_ key: MonthKey) {
+    /// Called only from `ensureLoaded` (async work, never view evaluation).
+    private func markRecentlyUsed(_ key: MonthKey) {
         hotOrder.removeAll { $0 == key }
         hotOrder.append(key)
+        evictIfNeeded()
+    }
+
+    /// Evicts least-recently-used *loaded* slices by clearing their rows. Slice
+    /// object identity is kept (the dictionary stays stable for observers) and
+    /// `reloadToken` is bumped so affected sections schedule a reload.
+    private func evictIfNeeded() {
         while hotOrder.count > maxHotSlices {
-            let evict = hotOrder.removeFirst()
-            slices.removeValue(forKey: evict)
+            guard let victim = hotOrder.first(where: { key in
+                guard let slice = slices[key] else { return true }  // stale entry
+                return slice.isLoaded && !slice.isLoading
+            }) else { return }
+            hotOrder.removeAll { $0 == victim }
+            if let slice = slices[victim], slice.isLoaded {
+                slice.assets = []
+                slice.isLoaded = false
+                slice.reloadToken = nextReloadToken()
+            }
         }
+    }
+
+    private func nextReloadToken() -> Int {
+        reloadTokenCounter += 1
+        return reloadTokenCounter
     }
 }

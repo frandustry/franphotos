@@ -43,7 +43,7 @@ FranPhotos 是一个 SwiftUI macOS 照片应用，严格分层：**SQLite 是唯
 
 ### Stores（表现模型，全部 `@MainActor @Observable`）
 
-- **TimelineStore** — 月索引 + `MonthSlice` LRU 池（`maxHotSlices = 3`），四级缩放（years / months / days / allPhotos），跨年导航自动加载相邻月分区。
+- **TimelineStore** — 月索引 + `MonthSlice` LRU 池（`maxHotSlices = 12`），四级缩放（years / months / days / allPhotos），跨年导航自动加载相邻月分区。`slice(for:)` 是纯读取（LRU 触碰只发生在 `ensureLoaded` 异步路径里——在视图 body 求值期间改可观察状态曾导致 AttributeGraph 无限失效循环卡死主线程）；逐出不清字典条目，而是清空 `MonthSlice.assets` 并自增 `reloadToken`，屏幕上的分区借此自动重新加载。
 - **AlbumsStore** — 相簿列表；每次变更经 `AlbumStore` 落库后 `markAlbumDirty` + `syncAlbums` 重建该册 parquet。
 - **SearchStore** — FTS5 全文（title/caption/keywords/filename）+ 结构化 scope（全部/照片/视频/收藏），250ms 防抖。
 - **PeopleStore** — 人脸扫描编排（`faces_scanned = 0` 的资产逐一过 `FaceScanner`，缩略图写 `faces/<faceUUID>.jpg`）、人物命名/合并/封面。
@@ -103,7 +103,8 @@ scroll 到某月
           优先 parquet/timeline/YYYY/YYYY-MM.parquet
           缺失/不可读 → SQLite SELECT * ... ORDER BY captured_at DESC（并等待下次修复重建）
       → MonthSlice.assets（过滤隐藏/已删除），按 captured_at 倒序
-  → LRU：hotOrder 超过 maxHotSlices = 3 时逐出最久未用的 MonthSlice
+  → LRU：hotOrder 超过 maxHotSlices = 12 时逐出最久未用的已加载 MonthSlice
+    （清空其 assets、保留对象身份、reloadToken 自增，分区视图自动重新加载）
 缩略图
   → DerivativeCache.image(for:size:) → 内存 → 磁盘 → 解码重建
 ```

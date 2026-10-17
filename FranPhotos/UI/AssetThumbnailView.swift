@@ -15,10 +15,11 @@ struct AssetThumbnailView: View {
     @State private var hoverDebounce: Task<Void, Never>?
 
     private let hoverDelayNanoseconds: UInt64 = 300_000_000
+    static let cornerRadius: CGFloat = 6
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            Rectangle().fill(Color.secondary.opacity(0.12))
+        ZStack {
+            placeholder
             if let image {
                 Image(nsImage: image)
                     .resizable()
@@ -32,8 +33,8 @@ struct AssetThumbnailView: View {
             }
             badges
         }
-        .clipped()
         .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
         .task(id: asset.editVersion) {
             image = await cache.image(for: asset, size: .thumb)
         }
@@ -47,6 +48,14 @@ struct AssetThumbnailView: View {
         }
         .onDisappear {
             stopHoverPlayback()
+        }
+    }
+
+    private var placeholder: some View {
+        ZStack {
+            Color.secondary.opacity(0.08)
+            Image(systemName: asset.isVideo ? "video" : "photo")
+                .foregroundStyle(.quaternary)
         }
     }
 
@@ -88,28 +97,55 @@ struct AssetThumbnailView: View {
 
     @ViewBuilder
     private var badges: some View {
-        HStack(spacing: 4) {
-            if asset.isLivePhoto {
-                Image(systemName: "livephoto")
-                    .font(.caption2.weight(.semibold))
-            }
-            if asset.hdrType != .sdr {
-                Text("HDR")
-                    .font(.system(size: 9, weight: .bold))
-            }
-            if asset.isFavorite {
-                Image(systemName: "heart.fill")
-                    .font(.caption2)
+        VStack(spacing: 0) {
+            HStack {
+                if asset.isLivePhoto {
+                    BadgeLabel(icon: "livephoto")
+                }
+                Spacer()
+                if asset.hdrType != .sdr {
+                    BadgeLabel(text: "HDR")
+                }
             }
             Spacer()
-            if asset.isVideo, let ms = asset.durationMs {
-                Text(Self.formatDuration(ms: ms))
-                    .font(.caption2.monospacedDigit())
+            HStack {
+                if asset.isFavorite {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.6), radius: 1.5, y: 0.5)
+                }
+                Spacer()
+                if asset.isVideo, let ms = asset.durationMs {
+                    BadgeLabel(icon: "video.fill", text: Self.formatDuration(ms: ms))
+                }
             }
         }
-        .padding(4)
-        .foregroundStyle(.white)
-        .shadow(radius: 2)
+        .padding(5)
+        .allowsHitTesting(false)
+    }
+
+    /// Small translucent capsule used for LIVE / HDR / duration badges.
+    private struct BadgeLabel: View {
+        var icon: String? = nil
+        var text: String? = nil
+
+        var body: some View {
+            HStack(spacing: 3) {
+                if let icon {
+                    Image(systemName: icon)
+                }
+                if let text {
+                    Text(text)
+                        .monospacedDigit()
+                }
+            }
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Color.black.opacity(0.55), in: Capsule())
+        }
     }
 
     static func formatDuration(ms: Int) -> String {
