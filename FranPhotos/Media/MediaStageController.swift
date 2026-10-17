@@ -108,6 +108,8 @@ final class MediaStageController {
 
     // MARK: - Playback
 
+    /// Plays from the beginning (the still frame sits mid-video for live photos;
+    /// for plain videos the poster is frame 0). Repeated plays restart from 0.
     func play() {
         guard hasVideo else { return }
         if player == nil {
@@ -120,6 +122,8 @@ final class MediaStageController {
                 try? await Task.sleep(nanoseconds: 25_000_000)
             }
             guard let player else { return }
+            _ = await player.seek(to: .zero, toleranceBefore: .positiveInfinity,
+                                  toleranceAfter: .positiveInfinity)
             playbackState = .playing
             player.play()
         }

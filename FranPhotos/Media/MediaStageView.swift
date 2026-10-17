@@ -10,9 +10,12 @@ struct MediaStageView: View {
     var autoplay: Bool = false
     var muted: Bool = false
     var showsControls: Bool = false
+    /// LIVE badge top-left; hovering it (300 ms debounce) plays the live photo.
+    var showsLiveBadge: Bool = true
     var onVideoFinished: (() -> Void)?
 
     @State private var controller: MediaStageController?
+    @State private var liveHoverDebounce: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -22,8 +25,11 @@ struct MediaStageView: View {
                     .opacity(controller.videoLayerOpacity)
                     .animation(.easeInOut(duration: 0.15), value: controller.playbackState)
             }
-            if showsControls, let controller, controller.hasVideo {
+            if showsControls, let controller, controller.hasVideo, asset.isVideo {
                 controlsOverlay(controller)
+            }
+            if showsLiveBadge, asset.isLivePhoto, let controller {
+                liveBadge(controller)
             }
         }
         .background(Color.black)
@@ -41,7 +47,51 @@ struct MediaStageView: View {
             }
         }
         .onDisappear {
+            liveHoverDebounce?.cancel()
             controller?.teardown()
+        }
+    }
+
+    /// LIVE badge: hovering plays (mirrors Apple Photos), leaving stops.
+    private func liveBadge(_ controller: MediaStageController) -> some View {
+        VStack {
+            HStack {
+                HStack(spacing: 4) {
+                    Image(systemName: controller.playbackState == .playing
+                          ? "livephoto" : "livephoto")
+                    Text("LIVE")
+                }
+                .font(.caption.weight(.bold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.black.opacity(0.55), in: Capsule())
+                .foregroundStyle(.white)
+                .padding(12)
+                .contentShape(Rectangle())
+                .onHover { hovering in
+                    liveHoverDebounce?.cancel()
+                    if hovering {
+                        liveHoverDebounce = Task {
+                            try? await Task.sleep(nanoseconds: 300_000_000)
+                            guard !Task.isCancelled else { return }
+                            controller.play()
+                        }
+                    } else {
+                        controller.returnToStill()
+                    }
+                }
+                Spacer()
+                if asset.hdrType != .sdr {
+                    Text("HDR")
+                        .font(.caption.weight(.bold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.black.opacity(0.55), in: Capsule())
+                        .foregroundStyle(.white)
+                        .padding(12)
+                }
+            }
+            Spacer()
         }
     }
 

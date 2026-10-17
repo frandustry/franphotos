@@ -1,10 +1,20 @@
 import SwiftUI
 
-/// A grid cell thumbnail with badges (video duration, LIVE, HDR, favorite).
+/// Grid cell with badges AND hover-to-play (muted inline playback for videos and
+/// live photos, like Apple Photos). Playback is debounced by ~300 ms so skimming
+/// across the grid never spawns decoders.
 struct AssetThumbnailView: View {
     let asset: Asset
     let cache: DerivativeCache
+    var paths: LibraryPaths? = nil
+
+    @AppStorage("hoverPlaybackEnabled") private var hoverPlaybackEnabled = true
+
     @State private var image: NSImage?
+    @State private var controller: MediaStageController?
+    @State private var hoverDebounce: Task<Void, Never>?
+
+    private let hoverDelayNanoseconds: UInt64 = 300_000_000
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -14,6 +24,12 @@ struct AssetThumbnailView: View {
                     .resizable()
                     .scaledToFill()
             }
+            if let controller, controller.hasVideo {
+                VideoLayerView(player: controller.player)
+                    .opacity(controller.videoLayerOpacity)
+                    .animation(.easeInOut(duration: 0.15), value: controller.playbackState)
+                    .allowsHitTesting(false)
+            }
             badges
         }
         .clipped()
@@ -21,7 +37,54 @@ struct AssetThumbnailView: View {
         .task(id: asset.editVersion) {
             image = await cache.image(for: asset, size: .thumb)
         }
+        .onHover { hovering in
+            guard hoverPlaybackEnabled, asset.isVideo || asset.isLivePhoto else { return }
+            if hovering {
+                startHoverPlayback()
+            } else {
+                stopHoverPlayback()
+            }
+        }
+        .onDisappear {
+            stopHoverPlayback()
+        }
     }
+
+    // MARK: - Hover playback
+
+    private func startHoverPlayback() {
+        hoverDebounce?.cancel()
+        hoverDebounce = Task { [asset, paths] in
+            try? await Task.sleep(nanoseconds: hoverDelayNanoseconds)
+            guard !Task.isCancelled, let paths else { return }
+            if controller == nil {
+                let c = MediaStageController(asset: asset, paths: paths)
+                c.isMuted = true
+                controller = c
+            }
+            controller?.play()
+        }
+    }
+
+    private func stopHoverPlayback() {
+        hoverDebounce?.cancel()
+        hoverDebounce = nil
+        controller?.returnToStill()
+        // Release the decoder promptly; PlayerPool would LRU it anyway.
+        let c = controller
+        Task { [asset, paths] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            // Only tear down if it stayed idle.
+            if let c, c.playbackState == .still {
+                c.teardown()
+                if controller === c { controller = nil }
+            }
+            _ = asset
+            _ = paths
+        }
+    }
+
+    // MARK: - Badges
 
     @ViewBuilder
     private var badges: some View {

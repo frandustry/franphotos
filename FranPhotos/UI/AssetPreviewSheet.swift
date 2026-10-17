@@ -16,24 +16,5 @@ struct AssetPreviewSheet: View {
             }
         }
         .frame(minWidth: 720, minHeight: 540)
-        .overlay(alignment: .topLeading) {
-            HStack(spacing: 8) {
-                if asset.isLivePhoto {
-                    Label("LIVE", systemImage: "livephoto")
-                        .font(.caption.weight(.bold))
-                        .padding(.horizontal, 6).padding(.vertical, 3)
-                        .background(.black.opacity(0.55), in: Capsule())
-                        .foregroundStyle(.white)
-                }
-                if asset.hdrType != .sdr {
-                    Text("HDR")
-                        .font(.caption.weight(.bold))
-                        .padding(.horizontal, 6).padding(.vertical, 3)
-                        .background(.black.opacity(0.55), in: Capsule())
-                        .foregroundStyle(.white)
-                }
-            }
-            .padding(12)
-        }
     }
 }

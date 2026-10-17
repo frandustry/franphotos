@@ -57,6 +57,7 @@ final class FilteredAssetStore {
 struct FilteredAssetGridView: View {
     let cache: DerivativeCache
     let db: DatabaseActor
+    let paths: LibraryPaths
     let filter: FilteredAssetStore.Filter
     @State private var store: FilteredAssetStore?
     @State private var selection = Set<UUID>()
@@ -73,7 +74,7 @@ struct FilteredAssetGridView: View {
                     )
                 } else {
                     AssetGridView(assets: store.assets, cache: cache, selection: $selection,
-                                  onOpen: { previewAsset = $0 })
+                                  paths: paths, onOpen: { previewAsset = $0 })
                 }
             } else {
                 ProgressView()

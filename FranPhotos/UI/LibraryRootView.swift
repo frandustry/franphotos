@@ -59,18 +59,18 @@ struct LibraryRootView: View {
     @ViewBuilder
     private var detailView: some View {
         if let timeline = manager.timelineStore, let cache = manager.derivativeCache,
-           let db = manager.db {
+           let db = manager.db, let paths = manager.library?.paths {
             switch selection {
             case .section(.photos):
-                TimelineGridView(timeline: timeline, cache: cache, db: db)
+                TimelineGridView(timeline: timeline, cache: cache, db: db, paths: paths)
             case .section(.videos):
-                FilteredAssetGridView(cache: cache, db: db,
+                FilteredAssetGridView(cache: cache, db: db, paths: paths,
                                       filter: .init(kind: .videos))
             case .section(.livePhotos):
-                FilteredAssetGridView(cache: cache, db: db,
+                FilteredAssetGridView(cache: cache, db: db, paths: paths,
                                       filter: .init(kind: .livePhotos))
             case .section(.favorites):
-                FilteredAssetGridView(cache: cache, db: db,
+                FilteredAssetGridView(cache: cache, db: db, paths: paths,
                                       filter: .init(kind: .favorites))
             }
         } else {

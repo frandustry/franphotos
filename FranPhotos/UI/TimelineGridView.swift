@@ -6,6 +6,7 @@ struct TimelineGridView: View {
     @Bindable var timeline: TimelineStore
     let cache: DerivativeCache
     let db: DatabaseActor
+    let paths: LibraryPaths
 
     @State private var selection = Set<UUID>()
     @State private var cellSize: Double = 120
@@ -86,7 +87,7 @@ struct TimelineGridView: View {
             LazyVGrid(columns: columns, spacing: 2, pinnedViews: [.sectionHeaders]) {
                 ForEach(timeline.months) { month in
                     MonthSliceSection(timeline: timeline, monthKey: month.key,
-                                      cache: cache, selection: $selection, cellSize: cellSize,
+                                      cache: cache, paths: paths, selection: $selection, cellSize: cellSize,
                                       groupByDay: true,
                                       onOpen: { previewAsset = $0 })
                 }
@@ -102,7 +103,7 @@ struct TimelineGridView: View {
             LazyVGrid(columns: columns, spacing: 2, pinnedViews: [.sectionHeaders]) {
                 ForEach(timeline.months) { month in
                     MonthSliceSection(timeline: timeline, monthKey: month.key,
-                                      cache: cache, selection: $selection, cellSize: cellSize,
+                                      cache: cache, paths: paths, selection: $selection, cellSize: cellSize,
                                       groupByDay: false,
                                       onOpen: { previewAsset = $0 })
                 }
@@ -118,6 +119,7 @@ private struct MonthSliceSection: View {
     let timeline: TimelineStore
     let monthKey: MonthKey
     let cache: DerivativeCache
+    let paths: LibraryPaths
     @Binding var selection: Set<UUID>
     let cellSize: Double
     let groupByDay: Bool
@@ -171,7 +173,7 @@ private struct MonthSliceSection: View {
     @ViewBuilder
     private func assetCells(_ assets: [Asset]) -> some View {
         ForEach(assets) { asset in
-            AssetThumbnailView(asset: asset, cache: cache)
+            AssetThumbnailView(asset: asset, cache: cache, paths: paths)
                 .overlay(selection.contains(asset.id)
                          ? Color.accentColor.opacity(0.25) : Color.clear)
                 .onTapGesture(count: 2) {

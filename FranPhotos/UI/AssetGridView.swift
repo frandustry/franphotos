@@ -5,6 +5,7 @@ struct AssetGridView: View {
     let assets: [Asset]
     let cache: DerivativeCache
     @Binding var selection: Set<UUID>
+    var paths: LibraryPaths? = nil
     var cellSize: Double = 120
     var onOpen: ((Asset) -> Void)? = nil
 
@@ -16,7 +17,7 @@ struct AssetGridView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 2) {
                 ForEach(assets) { asset in
-                    AssetThumbnailView(asset: asset, cache: cache)
+                    AssetThumbnailView(asset: asset, cache: cache, paths: paths)
                         .overlay(selection.contains(asset.id)
                                  ? Color.accentColor.opacity(0.25) : Color.clear)
                         .overlay(
