@@ -1,0 +1,18 @@
+# macOS / Xcode
+.DS_Store
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+.swiftpm/
+
+# App artifacts
+FranPhotos.app
+
+# Test libraries produced by integration scripts
+*.franphotoslibrary/
+
+# Go
+go/fpparquet/fpparquet
+go/fpparquet/bin/
