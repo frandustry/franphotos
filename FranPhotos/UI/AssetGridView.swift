@@ -11,15 +11,14 @@ struct AssetGridView: View {
     var onOpen: ((Asset) -> Void)? = nil
     var onPlaySlideshow: (([UUID]) -> Void)? = nil
 
-    private var columns: [GridItem] {
-        [GridItem(.adaptive(minimum: cellSize, maximum: cellSize * 1.4), spacing: 4)]
-    }
-
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 4) {
-                ForEach(assets) { asset in
-                    AssetThumbnailView(asset: asset, cache: cache, paths: paths)
+        GeometryReader { proxy in
+            let layout = GridLayout.layout(containerWidth: proxy.size.width, target: cellSize)
+            ScrollView {
+                LazyVGrid(columns: layout.columns, spacing: GridLayout.spacing) {
+                    ForEach(assets) { asset in
+                        AssetThumbnailView(asset: asset, cache: cache, paths: paths,
+                                           size: layout.cell)
                         .overlay {
                             if selection.contains(asset.id) {
                                 RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -47,9 +46,10 @@ struct AssetGridView: View {
                                 selection = [asset.id]
                             }
                         }
+                    }
                 }
+                .padding(GridLayout.horizontalPadding)
             }
-            .padding(4)
         }
         .onChange(of: selection) { _, newValue in
             manager.selectedAssetUUIDs = newValue

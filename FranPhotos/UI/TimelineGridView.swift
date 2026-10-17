@@ -18,10 +18,6 @@ struct TimelineGridView: View {
     @State private var slideshowAssets: [Asset]?
     @Environment(LibraryManager.self) private var manager
 
-    private var columns: [GridItem] {
-        [GridItem(.adaptive(minimum: cellSize, maximum: cellSize * 1.4), spacing: 4)]
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             switch timeline.zoom {
@@ -122,34 +118,35 @@ struct TimelineGridView: View {
     // MARK: - Days
 
     private var daysGrid: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 4, pinnedViews: [.sectionHeaders]) {
-                ForEach(timeline.months) { month in
-                    MonthSliceSection(timeline: timeline, monthKey: month.key,
-                                      cache: cache, paths: paths, selection: $selection,
-                                      groupByDay: true,
-                                      onOpen: { previewAsset = $0 },
-                                      onPlaySlideshow: startSlideshow(uuids:))
-                }
-            }
-            .padding(4)
-        }
+        timelineGrid(groupByDay: true)
     }
 
     // MARK: - All Photos
 
     private var allPhotosGrid: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 4, pinnedViews: [.sectionHeaders]) {
-                ForEach(timeline.months) { month in
-                    MonthSliceSection(timeline: timeline, monthKey: month.key,
-                                      cache: cache, paths: paths, selection: $selection,
-                                      groupByDay: false,
-                                      onOpen: { previewAsset = $0 },
-                                      onPlaySlideshow: startSlideshow(uuids:))
+        timelineGrid(groupByDay: false)
+    }
+
+    /// Shared month-sectioned grid. The GeometryReader measures the container
+    /// so GridLayout can produce exact fixed-size columns whose cells fill each
+    /// row edge-to-edge with uniform square thumbnails.
+    private func timelineGrid(groupByDay: Bool) -> some View {
+        GeometryReader { proxy in
+            let layout = GridLayout.layout(containerWidth: proxy.size.width, target: cellSize)
+            ScrollView {
+                LazyVGrid(columns: layout.columns, spacing: GridLayout.spacing,
+                          pinnedViews: [.sectionHeaders]) {
+                    ForEach(timeline.months) { month in
+                        MonthSliceSection(timeline: timeline, monthKey: month.key,
+                                          cache: cache, paths: paths, selection: $selection,
+                                          cellSize: layout.cell, columnCount: layout.columns.count,
+                                          groupByDay: groupByDay,
+                                          onOpen: { previewAsset = $0 },
+                                          onPlaySlideshow: startSlideshow(uuids:))
+                    }
                 }
+                .padding(GridLayout.horizontalPadding)
             }
-            .padding(4)
         }
     }
 
@@ -175,6 +172,8 @@ private struct MonthSliceSection: View {
     let cache: DerivativeCache
     let paths: LibraryPaths
     @Binding var selection: Set<UUID>
+    let cellSize: Double
+    let columnCount: Int
     let groupByDay: Bool
     var onOpen: ((Asset) -> Void)? = nil
     var onPlaySlideshow: (([UUID]) -> Void)? = nil
@@ -216,22 +215,17 @@ private struct MonthSliceSection: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .gridCellColumns(gridColumnCount)
+                .gridCellColumns(columnCount)
                 .padding(.horizontal, 8)
                 .padding(.top, 8)
             assetCells(group.assets)
         }
     }
 
-    private var gridColumnCount: Int {
-        // Approximation for gridCellColumns spanning: wide enough to cover any row.
-        12
-    }
-
     @ViewBuilder
     private func assetCells(_ assets: [Asset]) -> some View {
         ForEach(assets) { asset in
-            AssetThumbnailView(asset: asset, cache: cache, paths: paths)
+            AssetThumbnailView(asset: asset, cache: cache, paths: paths, size: cellSize)
                 .overlay {
                     if selection.contains(asset.id) {
                         RoundedRectangle(cornerRadius: 6, style: .continuous)

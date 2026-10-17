@@ -7,6 +7,11 @@ struct AssetThumbnailView: View {
     let asset: Asset
     let cache: DerivativeCache
     var paths: LibraryPaths? = nil
+    /// Explicit square edge in points. Grids always pass the exact computed
+    /// cell size so the image is cropped to a uniform square; nil falls back
+    /// to a 1:1 aspect-ratio constraint (used by callers that frame the view
+    /// themselves).
+    var size: Double? = nil
 
     @AppStorage("hoverPlaybackEnabled") private var hoverPlaybackEnabled = true
 
@@ -18,6 +23,33 @@ struct AssetThumbnailView: View {
     static let cornerRadius: CGFloat = 6
 
     var body: some View {
+        sizedContent
+            .task(id: asset.editVersion) {
+                image = await cache.image(for: asset, size: .thumb)
+            }
+            .onHover { hovering in
+                guard hoverPlaybackEnabled, asset.isVideo || asset.isLivePhoto else { return }
+                if hovering {
+                    startHoverPlayback()
+                } else {
+                    stopHoverPlayback()
+                }
+            }
+            .onDisappear {
+                stopHoverPlayback()
+            }
+    }
+
+    @ViewBuilder
+    private var sizedContent: some View {
+        if let size {
+            cellContent.frame(width: size, height: size)
+        } else {
+            cellContent.aspectRatio(1, contentMode: .fit)
+        }
+    }
+
+    private var cellContent: some View {
         ZStack {
             placeholder
             if let image {
@@ -33,22 +65,7 @@ struct AssetThumbnailView: View {
             }
             badges
         }
-        .aspectRatio(1, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
-        .task(id: asset.editVersion) {
-            image = await cache.image(for: asset, size: .thumb)
-        }
-        .onHover { hovering in
-            guard hoverPlaybackEnabled, asset.isVideo || asset.isLivePhoto else { return }
-            if hovering {
-                startHoverPlayback()
-            } else {
-                stopHoverPlayback()
-            }
-        }
-        .onDisappear {
-            stopHoverPlayback()
-        }
     }
 
     private var placeholder: some View {
