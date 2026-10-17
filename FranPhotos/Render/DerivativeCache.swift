@@ -89,6 +89,13 @@ actor DerivativeCache {
         }
     }
 
+    /// Memory/disk fast path used by cover cards; returns nil when no derivative
+    /// has been rendered yet (the caller can then fetch the asset and render).
+    func imageIfCached(forAssetUUID uuid: UUID, size: DerivativeSize) -> NSImage? {
+        let fileURL = size.url(for: uuid, in: paths)
+        return NSImage(contentsOf: fileURL)
+    }
+
     // MARK: - Rendering
 
     private static func render(asset: Asset, size: DerivativeSize, paths: LibraryPaths) async -> CGImage? {

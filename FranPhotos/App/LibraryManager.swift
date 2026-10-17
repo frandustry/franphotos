@@ -9,6 +9,8 @@ final class LibraryManager {
     private(set) var library: LibraryStore?
     private(set) var db: DatabaseActor?
     private(set) var derivativeCache: DerivativeCache?
+    private(set) var parquetSync: ParquetSync?
+    private(set) var timelineStore: TimelineStore?
 
     var importProgress = ImportProgress()
     var isImporting = false
@@ -62,14 +64,41 @@ final class LibraryManager {
         self.library = store
         self.db = dbActor
         self.derivativeCache = DerivativeCache(paths: store.paths)
+        let sync = ParquetSync(db: dbActor, paths: store.paths)
+        self.parquetSync = sync
+        self.timelineStore = TimelineStore(sync: sync)
         self.errorMessage = nil
+
+        // Background: validate parquet partitions against SQLite and repair stale ones.
+        Task { [sync] in
+            try? await sync.validateAndRepair()
+        }
     }
 
     func closeLibrary() {
         importTask?.cancel()
+        // Best-effort: flush dirty partitions before dropping the library.
+        if let sync = parquetSync {
+            Task { try? await sync.syncTimeline() }
+        }
         library = nil
         db = nil
         derivativeCache = nil
+        parquetSync = nil
+        timelineStore = nil
+    }
+
+    func loadTimelineIndex() async {
+        await timelineStore?.loadIndex()
+    }
+
+    /// Called after any mutation of assets: keep parquet partitions in sync.
+    func markMonthsDirty(_ months: Set<MonthKey>) {
+        guard let sync = parquetSync else { return }
+        Task {
+            try? await sync.markDirty(months: months)
+            try? await sync.syncTimeline()
+        }
     }
 
     // MARK: - Import
@@ -97,6 +126,19 @@ final class LibraryManager {
             guard let self else { return }
             self.lastOutcome = outcome
             self.isImporting = false
+            // Sync affected timeline partitions, then refresh the grid.
+            if !outcome.importedUUIDs.isEmpty {
+                let uuids = outcome.importedUUIDs
+                Task { [weak self] in
+                    guard let self, let db = self.db else { return }
+                    let list = uuids.map { "'\($0.uuidString)'" }.joined(separator: ",")
+                    let rows = (try? await db.query(
+                        "SELECT captured_at FROM assets WHERE uuid IN (\(list))")) ?? []
+                    let months = Set(rows.compactMap { $0.date("captured_at") }.map(MonthKey.init))
+                    self.markMonthsDirty(months)
+                    await self.timelineStore?.invalidate()
+                }
+            }
         }
     }
 
