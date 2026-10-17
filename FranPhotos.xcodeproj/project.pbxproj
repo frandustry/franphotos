@@ -9,6 +9,7 @@
 /* Begin PBXFileReference section */
 		FA0000000000000000000006 /* FranPhotos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FranPhotos.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FA0000000000000000000007 /* FranPhotosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FranPhotosTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FA000000000000000000001F /* FranPhotosUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FranPhotosUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FA000000000000000000001A /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = Platforms/MacOSX.platform/Developer/Library/Frameworks/XCTest.framework; sourceTree = DEVELOPER_DIR; };
 /* End PBXFileReference section */
 
@@ -23,6 +24,11 @@
 			path = FranPhotosTests;
 			sourceTree = "<group>";
 		};
+		FA000000000000000000001E /* FranPhotosUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = FranPhotosUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -30,6 +36,14 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA0000000000000000000022 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA0000000000000000000028 /* XCTest.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -45,6 +59,7 @@
 
 /* Begin PBXBuildFile section */
 		FA000000000000000000001B /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FA000000000000000000001A /* XCTest.framework */; platformFilter = maccatalyst; };
+		FA0000000000000000000028 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FA000000000000000000001A /* XCTest.framework */; platformFilter = maccatalyst; };
 /* End PBXBuildFile section */
 
 /* Begin PBXGroup section */
@@ -53,6 +68,7 @@
 			children = (
 				FA0000000000000000000004 /* FranPhotos */,
 				FA0000000000000000000005 /* FranPhotosTests */,
+				FA000000000000000000001E /* FranPhotosUITests */,
 				FA000000000000000000001C /* Frameworks */,
 				FA0000000000000000000003 /* Products */,
 			);
@@ -63,6 +79,7 @@
 			children = (
 				FA0000000000000000000006 /* FranPhotos.app */,
 				FA0000000000000000000007 /* FranPhotosTests.xctest */,
+				FA000000000000000000001F /* FranPhotosUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -126,7 +143,30 @@
 		};
 /* End PBXNativeTarget section */
 
-/* Begin PBXProject section */
+		FA0000000000000000000020 /* FranPhotosUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FA0000000000000000000024 /* Build configuration list for PBXNativeTarget "FranPhotosUITests" */;
+			buildPhases = (
+				FA0000000000000000000021 /* Sources */,
+				FA0000000000000000000022 /* Frameworks */,
+				FA0000000000000000000023 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FA0000000000000000000027 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				FA000000000000000000001E /* FranPhotosUITests */,
+			);
+			name = FranPhotosUITests;
+			packageProductDependencies = (
+			);
+			productName = FranPhotosUITests;
+			productReference = FA000000000000000000001F /* FranPhotosUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXProject section */
 		FA0000000000000000000001 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
@@ -138,6 +178,10 @@
 						CreatedOnToolsVersion = 27.1;
 					};
 					FA0000000000000000000009 = {
+						CreatedOnToolsVersion = 27.1;
+						TestTargetID = FA0000000000000000000008;
+					};
+					FA0000000000000000000020 = {
 						CreatedOnToolsVersion = 27.1;
 						TestTargetID = FA0000000000000000000008;
 					};
@@ -160,12 +204,20 @@
 			targets = (
 				FA0000000000000000000008 /* FranPhotos */,
 				FA0000000000000000000009 /* FranPhotosTests */,
+				FA0000000000000000000020 /* FranPhotosUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		FA000000000000000000000C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA0000000000000000000023 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -208,6 +260,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FA0000000000000000000021 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FA000000000000000000000D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -219,6 +278,10 @@
 
 /* Begin PBXTargetDependency section */
 		FA0000000000000000000019 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FA0000000000000000000008 /* FranPhotos */;
+		};
+		FA0000000000000000000027 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = FA0000000000000000000008 /* FranPhotos */;
 		};
@@ -357,6 +420,38 @@
 			};
 			name = Release;
 		};
+		FA0000000000000000000025 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.franphotos.FranPhotosUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = FranPhotos;
+			};
+			name = Debug;
+		};
+		FA0000000000000000000026 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.franphotos.FranPhotosUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = FranPhotos;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -383,6 +478,15 @@
 			buildConfigurations = (
 				FA0000000000000000000017 /* Debug */,
 				FA0000000000000000000018 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FA0000000000000000000024 /* Build configuration list for PBXNativeTarget "FranPhotosUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA0000000000000000000025 /* Debug */,
+				FA0000000000000000000026 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

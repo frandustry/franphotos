@@ -41,6 +41,19 @@
                ReferencedContainer = "container:FranPhotos.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <!-- UI tests need UI-automation permission on the host; run them from Xcode.
+              Skipped in CLI `xcodebuild test` to keep headless CI green. -->
+         <TestableReference
+            skipped = "YES"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "FA0000000000000000000020"
+               BuildableName = "FranPhotosUITests.xctest"
+               BlueprintName = "FranPhotosUITests"
+               ReferencedContainer = "container:FranPhotos.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
