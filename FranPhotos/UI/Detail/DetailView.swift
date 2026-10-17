@@ -16,6 +16,7 @@ struct DetailView: View {
 
     @State private var current: Asset
     @State private var showInfo = false
+    @State private var isEditing = false
     @State private var preloadedNeighbors: [UUID: Asset] = [:]
 
     init(initialAsset: Asset, paths: LibraryPaths,
@@ -32,8 +33,17 @@ struct DetailView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            mainStage
-            if showInfo {
+            if isEditing {
+                EditView(asset: current,
+                         onSaved: { updated in
+                             current = updated
+                             isEditing = false
+                         },
+                         onCancel: { isEditing = false })
+            } else {
+                mainStage
+            }
+            if showInfo && !isEditing {
                 InfoPanelView(asset: current, onMutated: { updated in
                     current = updated
                 })
@@ -46,7 +56,10 @@ struct DetailView: View {
         .focusEffectDisabled()
         .onKeyPress(.leftArrow) { navigate(-1); return .handled }
         .onKeyPress(.rightArrow) { navigate(1); return .handled }
-        .onKeyPress(.escape) { onClose(); return .handled }
+        .onKeyPress(.escape) {
+            if isEditing { isEditing = false } else { onClose() }
+            return .handled
+        }
         .task(id: current.id) { preloadNeighbors() }
     }
 
@@ -73,6 +86,13 @@ struct DetailView: View {
                 .buttonStyle(.plain)
                 .keyboardShortcut(.cancelAction)
                 Spacer()
+                if current.mediaType == .photo {
+                    Button { isEditing = true } label: {
+                        Image(systemName: "slider.horizontal.3")
+                    }
+                    .buttonStyle(.plain)
+                    .help(String(localized: "Edit"))
+                }
                 Button { toggleFavorite() } label: {
                     Image(systemName: current.isFavorite ? "heart.fill" : "heart")
                         .foregroundStyle(current.isFavorite ? .red : .white)

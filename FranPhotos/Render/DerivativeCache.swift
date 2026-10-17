@@ -105,8 +105,12 @@ actor DerivativeCache {
         if asset.mediaType == .video {
             cgImage = await videoPoster(asset: asset, paths: paths, maxPixel: maxPixel)
         } else {
-            let original = paths.url(forRelativePath: asset.originalRelpath)
-            cgImage = HDRCompositor.sdrImage(from: original, hdrType: asset.hdrType, maxPixelSize: maxPixel)
+            // Edited assets render derivatives from their edit derivative.
+            let source = EditEngine.editDerivativeURL(asset: asset, paths: paths)
+                ?? paths.url(forRelativePath: asset.originalRelpath)
+            let hdrType: HDRType = EditEngine.editDerivativeURL(asset: asset, paths: paths) != nil
+                ? .sdr : asset.hdrType
+            cgImage = HDRCompositor.sdrImage(from: source, hdrType: hdrType, maxPixelSize: maxPixel)
         }
         guard let cgImage else { return nil }
         let dest = size.url(for: asset.uuid, in: paths)

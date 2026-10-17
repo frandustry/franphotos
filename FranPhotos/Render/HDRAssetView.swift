@@ -27,12 +27,17 @@ struct HDRAssetView: View {
     }
 
     private func load() async {
-        let url = paths.url(forRelativePath: asset.originalRelpath)
+        // Edited assets display the rendered edit derivative (SDR); the original
+        // stays untouched for revert/HDR round-trip.
+        let url = EditEngine.editDerivativeURL(asset: asset, paths: paths)
+            ?? paths.url(forRelativePath: asset.originalRelpath)
+        let hdrType = EditEngine.editDerivativeURL(asset: asset, paths: paths) != nil
+            ? .sdr : asset.hdrType
         let decoded = await Task.detached(priority: .userInitiated) { () -> (CIImage?, CIImage?) in
             guard let cg = ImageDecoder.downsampledImage(at: url, maxPixelSize: maxDecodePixels)
             else { return (nil, nil) }
             var gain: CIImage?
-            if asset.hdrType == .gainmap,
+            if hdrType == .gainmap,
                let gainCG = ImageDecoder.gainMapImage(at: url) {
                 gain = CIImage(cgImage: gainCG)
             }

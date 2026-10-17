@@ -5,7 +5,7 @@ enum SidebarItem: Hashable {
     case album(UUID)
 
     enum LibrarySection: String, CaseIterable {
-        case photos, videos, livePhotos, favorites
+        case photos, videos, livePhotos, favorites, places, memories, people
 
         var localizedName: String {
             switch self {
@@ -13,6 +13,9 @@ enum SidebarItem: Hashable {
             case .videos: String(localized: "Videos")
             case .livePhotos: String(localized: "Live Photos")
             case .favorites: String(localized: "Favorites")
+            case .places: String(localized: "Places")
+            case .memories: String(localized: "Memories")
+            case .people: String(localized: "People")
             }
         }
 
@@ -22,6 +25,9 @@ enum SidebarItem: Hashable {
             case .videos: "video"
             case .livePhotos: "livephoto"
             case .favorites: "heart"
+            case .places: "map"
+            case .memories: "sparkles.rectangle.stack"
+            case .people: "person.2"
             }
         }
     }
@@ -35,6 +41,7 @@ struct LibraryRootView: View {
     @State private var showNewAlbumSheet = false
     @State private var showSmartAlbumSheet = false
     @State private var newAlbumName = ""
+    @State private var searchText = ""
 
     var body: some View {
         NavigationSplitView {
@@ -85,6 +92,11 @@ struct LibraryRootView: View {
                     handleDrop(providers)
                 }
         }
+        .searchable(text: $searchText, placement: .toolbar,
+                    prompt: Text("Search photos"))
+        .onChange(of: searchText) { _, text in
+            manager.searchStore?.query = text
+        }
         .sheet(isPresented: $showNewAlbumSheet) {
             newAlbumSheet
         }
@@ -130,7 +142,10 @@ struct LibraryRootView: View {
     private var detailView: some View {
         if let timeline = manager.timelineStore, let cache = manager.derivativeCache,
            let db = manager.db, let paths = manager.library?.paths {
-            switch selection {
+            if let search = manager.searchStore, search.isActive {
+                SearchResultsView(store: search, cache: cache, paths: paths)
+            } else {
+                switch selection {
             case .section(.photos):
                 TimelineGridView(timeline: timeline, cache: cache, db: db, paths: paths)
             case .section(.videos):
@@ -142,9 +157,16 @@ struct LibraryRootView: View {
             case .section(.favorites):
                 FilteredAssetGridView(cache: cache, db: db, paths: paths,
                                       filter: .init(kind: .favorites))
+            case .section(.places):
+                PlacesView()
+            case .section(.memories):
+                MemoriesView()
+            case .section(.people):
+                PeopleView()
             case .album(let uuid):
                 FilteredAssetGridView(cache: cache, db: db, paths: paths,
                                       filter: .init(kind: .album(uuid)))
+                }
             }
         } else {
             ProgressView()

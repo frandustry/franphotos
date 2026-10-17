@@ -11,6 +11,7 @@ final class FilteredAssetStore {
         case livePhotos
         case favorites
         case album(UUID)
+        case person(UUID)
         case searchResults([UUID])
     }
 
@@ -32,6 +33,13 @@ final class FilteredAssetStore {
                 WHERE aa.album_uuid = '\(uuid.uuidString)' AND a.is_deleted = 0
                 ORDER BY aa.sort_index ASC, a.captured_at DESC
                 """
+            case .person(let uuid):
+                return """
+                SELECT DISTINCT a.* FROM assets a
+                JOIN faces f ON f.asset_uuid = a.uuid
+                WHERE f.person_uuid = '\(uuid.uuidString)' AND a.is_deleted = 0
+                ORDER BY a.captured_at DESC
+                """
             case .searchResults(let uuids):
                 let list = uuids.map { "'\($0.uuidString)'" }.joined(separator: ",")
                 return "SELECT * FROM assets WHERE uuid IN (\(list)) AND is_deleted = 0 ORDER BY captured_at DESC"
@@ -49,6 +57,11 @@ final class FilteredAssetStore {
     }
 
     func reload() async {
+        // Albums route through AlbumStore so smart-album rules are evaluated.
+        if case .album(let uuid) = filter.kind {
+            assets = (try? await AlbumStore(db: db).assets(in: uuid)) ?? []
+            return
+        }
         assets = ((try? await db.query(filter.sql)) ?? []).map(Asset.init)
     }
 }

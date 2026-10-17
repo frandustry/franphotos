@@ -33,7 +33,7 @@ struct DatabaseTests {
         let (actor, dir) = try await makeActor()
         defer { try? FileManager.default.removeItem(at: dir) }
         let version = try await actor.schemaVersion()
-        #expect(version == 1)
+        #expect(version == Migrations.all.map(\.version).max())
         // Idempotent: migrating again applies nothing.
         let reapplied = try await actor.migrate()
         #expect(reapplied.isEmpty)

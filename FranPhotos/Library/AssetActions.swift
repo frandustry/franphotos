@@ -100,6 +100,15 @@ struct AssetActions: Sendable {
             .compactMap { $0.text("name") }
     }
 
+    // MARK: - Edit recipes
+
+    /// Stores a new edit recipe version (non-destructive; original untouched).
+    func setEditRecipe(_ uuid: UUID, recipeJSON: String?, version: Int) async throws {
+        try await db.execute(
+            "UPDATE assets SET edit_recipe_json = ?, edit_version = ? WHERE uuid = ?",
+            [.optionalText(recipeJSON), .integer(Int64(version)), .text(uuid.uuidString)])
+    }
+
     // MARK: - Date & location
 
     /// Adjusts capture date. `tzOffsetSeconds` replaces the stored offset when non-nil.

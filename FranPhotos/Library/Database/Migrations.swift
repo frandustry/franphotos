@@ -10,6 +10,9 @@ struct Migration: Sendable {
 enum Migrations {
     static let all: [Migration] = [
         Migration(version: 1, name: "initial schema", sql: SchemaV1.sql),
+        Migration(version: 2, name: "faces_scanned flag", sql: """
+            ALTER TABLE assets ADD COLUMN faces_scanned INTEGER NOT NULL DEFAULT 0;
+            """),
     ]
 
     /// Applies all pending migrations, each in its own transaction.
