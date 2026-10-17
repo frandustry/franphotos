@@ -132,6 +132,46 @@ final class TimelineStore {
         await loadIndex()
     }
 
+    /// Replaces an asset in any loaded slice; removes it when it became
+    /// hidden/deleted (the main timeline never shows those).
+    func updateAssetInSlices(_ asset: Asset) {
+        let key = MonthKey(asset.capturedAt)
+        guard let slice = slices[key], slice.isLoaded else { return }
+        if asset.isHidden || asset.isDeleted {
+            slice.assets.removeAll { $0.id == asset.id }
+        } else if let index = slice.assets.firstIndex(where: { $0.id == asset.id }) {
+            slice.assets[index] = asset
+            slice.assets.sort(by: Asset.librarySortPredicate)
+        }
+    }
+
+    func removeFromSlices(_ uuid: UUID) {
+        for slice in slices.values {
+            slice.assets.removeAll { $0.id == uuid }
+        }
+    }
+
+    /// Neighbor navigation for the detail browser, crossing month boundaries
+    /// (loads the adjacent slice from parquet when needed).
+    func neighbor(of asset: Asset, direction: Int) async -> Asset? {
+        let key = MonthKey(asset.capturedAt)
+        await ensureLoaded(key)
+        let currentSlice = slice(for: key)
+        if let index = currentSlice.assets.firstIndex(where: { $0.id == asset.id }) {
+            let target = index + direction
+            if currentSlice.assets.indices.contains(target) {
+                return currentSlice.assets[target]
+            }
+        }
+        // Cross the month boundary.
+        guard let monthIndex = months.firstIndex(where: { $0.key == key }) else { return nil }
+        let neighborMonth = months[safe: monthIndex - direction]  // months sorted desc
+        guard let neighborMonth else { return nil }
+        await ensureLoaded(neighborMonth.key)
+        let assets = slice(for: neighborMonth.key).assets
+        return direction > 0 ? assets.last : assets.first
+    }
+
     // MARK: - LRU
 
     private func touch(_ key: MonthKey) {

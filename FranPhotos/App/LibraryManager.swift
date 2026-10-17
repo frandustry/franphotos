@@ -92,6 +92,36 @@ final class LibraryManager {
         await timelineStore?.loadIndex()
     }
 
+    var assetActions: AssetActions? {
+        db.map { AssetActions(db: $0) }
+    }
+
+    /// Runs an asset mutation, marks the month dirty, syncs parquet, refreshes
+    /// timeline slices, and returns the refreshed asset.
+    @discardableResult
+    func mutateAsset(
+        _ uuid: UUID,
+        _ mutation: (AssetActions) async throws -> Void
+    ) async -> Asset? {
+        guard let actions = assetActions else { return nil }
+        do {
+            try await mutation(actions)
+            if let month = try await actions.monthKey(of: uuid) {
+                markMonthsDirty([month])
+            }
+            let fresh = try await actions.fetch(uuid)
+            if let fresh {
+                await timelineStore?.updateAssetInSlices(fresh)
+            } else {
+                await timelineStore?.removeFromSlices(uuid)
+            }
+            return fresh
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
     /// Called after any mutation of assets: keep parquet partitions in sync.
     func markMonthsDirty(_ months: Set<MonthKey>) {
         guard let sync = parquetSync else { return }

@@ -80,8 +80,22 @@ struct FilteredAssetGridView: View {
                 ProgressView()
             }
         }
-        .sheet(item: $previewAsset) { asset in
-            AssetPreviewSheet(asset: asset)
+        .overlay {
+            if let previewAsset, let store {
+                DetailView(initialAsset: previewAsset, paths: paths,
+                           nextAsset: { asset in
+                               guard let idx = store.assets.firstIndex(where: { $0.id == asset.id })
+                               else { return nil }
+                               return store.assets[safe: idx + 1]
+                           },
+                           previousAsset: { asset in
+                               guard let idx = store.assets.firstIndex(where: { $0.id == asset.id })
+                               else { return nil }
+                               return store.assets[safe: idx - 1]
+                           },
+                           onClose: { self.previewAsset = nil })
+                .transition(.opacity)
+            }
         }
         .task {
             let store = FilteredAssetStore(filter: filter, db: db)

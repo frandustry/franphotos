@@ -40,8 +40,14 @@ struct TimelineGridView: View {
                     .help(String(localized: "Thumbnail size"))
             }
         }
-        .sheet(item: $previewAsset) { asset in
-            AssetPreviewSheet(asset: asset)
+        .overlay {
+            if let previewAsset {
+                DetailView(initialAsset: previewAsset, paths: paths,
+                           nextAsset: { await timeline.neighbor(of: $0, direction: 1) },
+                           previousAsset: { await timeline.neighbor(of: $0, direction: -1) },
+                           onClose: { self.previewAsset = nil })
+                .transition(.opacity)
+            }
         }
     }
 
