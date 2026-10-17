@@ -77,6 +77,10 @@ final class LibraryManager {
         Task { [sync] in
             try? await sync.validateAndRepair()
         }
+        // Background: purge Recently Deleted items past the 30-day retention.
+        Task { [dbActor, paths = store.paths] in
+            _ = try? await LibraryMaintenance.purgeExpiredTrash(db: dbActor, paths: paths)
+        }
     }
 
     func closeLibrary() {

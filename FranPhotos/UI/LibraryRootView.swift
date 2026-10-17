@@ -2,7 +2,28 @@ import SwiftUI
 
 enum SidebarItem: Hashable {
     case section(LibrarySection)
+    case utility(UtilitySection)
     case album(UUID)
+
+    enum UtilitySection: String, CaseIterable {
+        case hidden, recentlyDeleted, duplicates
+
+        var localizedName: String {
+            switch self {
+            case .hidden: String(localized: "Hidden")
+            case .recentlyDeleted: String(localized: "Recently Deleted")
+            case .duplicates: String(localized: "Duplicates")
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .hidden: "eye.slash"
+            case .recentlyDeleted: "trash"
+            case .duplicates: "square.on.square"
+            }
+        }
+    }
 
     enum LibrarySection: String, CaseIterable {
         case photos, videos, livePhotos, favorites, places, memories, people
@@ -50,6 +71,12 @@ struct LibraryRootView: View {
                     ForEach(SidebarItem.LibrarySection.allCases, id: \.self) { section in
                         Label(section.localizedName, systemImage: section.systemImage)
                             .tag(SidebarItem.section(section))
+                    }
+                }
+                Section(String(localized: "Utilities")) {
+                    ForEach(SidebarItem.UtilitySection.allCases, id: \.self) { section in
+                        Label(section.localizedName, systemImage: section.systemImage)
+                            .tag(SidebarItem.utility(section))
                     }
                 }
                 Section {
@@ -163,6 +190,12 @@ struct LibraryRootView: View {
                 MemoriesView()
             case .section(.people):
                 PeopleView()
+            case .utility(.hidden):
+                HiddenView(cache: cache, db: db, paths: paths)
+            case .utility(.recentlyDeleted):
+                TrashView(cache: cache, db: db, paths: paths)
+            case .utility(.duplicates):
+                DuplicatesView(cache: cache, db: db, paths: paths)
             case .album(let uuid):
                 FilteredAssetGridView(cache: cache, db: db, paths: paths,
                                       filter: .init(kind: .album(uuid)))

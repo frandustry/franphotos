@@ -10,6 +10,8 @@ final class FilteredAssetStore {
         case videos
         case livePhotos
         case favorites
+        case hidden
+        case recentlyDeleted
         case album(UUID)
         case person(UUID)
         case searchResults([UUID])
@@ -26,6 +28,10 @@ final class FilteredAssetStore {
                 return "SELECT * FROM assets WHERE is_live_photo = 1 AND is_deleted = 0 AND is_hidden = 0 ORDER BY captured_at DESC"
             case .favorites:
                 return "SELECT * FROM assets WHERE is_favorite = 1 AND is_deleted = 0 AND is_hidden = 0 ORDER BY captured_at DESC"
+            case .hidden:
+                return "SELECT * FROM assets WHERE is_hidden = 1 AND is_deleted = 0 ORDER BY captured_at DESC"
+            case .recentlyDeleted:
+                return "SELECT * FROM assets WHERE is_deleted = 1 ORDER BY deleted_at DESC"
             case .album(let uuid):
                 return """
                 SELECT a.* FROM assets a
