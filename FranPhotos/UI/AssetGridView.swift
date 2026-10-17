@@ -8,6 +8,7 @@ struct AssetGridView: View {
     var paths: LibraryPaths? = nil
     var cellSize: Double = 120
     var onOpen: ((Asset) -> Void)? = nil
+    var onPlaySlideshow: (([UUID]) -> Void)? = nil
 
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: cellSize, maximum: cellSize * 1.4), spacing: 2)]
@@ -28,7 +29,8 @@ struct AssetGridView: View {
                         .draggable(dragPayload(for: asset))
                         .contextMenu {
                             AssetContextMenu(assetUUIDs: selection.contains(asset.id)
-                                             ? Array(selection) : [asset.id])
+                                             ? Array(selection) : [asset.id],
+                                             onPlaySlideshow: onPlaySlideshow)
                         }
                         .onTapGesture(count: 2) {
                             selection = [asset.id]

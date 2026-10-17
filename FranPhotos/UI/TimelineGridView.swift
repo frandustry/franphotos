@@ -11,6 +11,8 @@ struct TimelineGridView: View {
     @State private var selection = Set<UUID>()
     @State private var cellSize: Double = 120
     @State private var previewAsset: Asset?
+    @State private var slideshowAssets: [Asset]?
+    @Environment(LibraryManager.self) private var manager
 
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: cellSize, maximum: cellSize * 1.4), spacing: 2)]
@@ -39,6 +41,13 @@ struct TimelineGridView: View {
                     .frame(width: 140)
                     .help(String(localized: "Thumbnail size"))
             }
+            ToolbarItem {
+                Button { startSlideshow() } label: {
+                    Image(systemName: "play.rectangle")
+                }
+                .help(String(localized: "Play Slideshow"))
+                .disabled(selection.isEmpty)
+            }
         }
         .overlay {
             if let previewAsset {
@@ -46,6 +55,11 @@ struct TimelineGridView: View {
                            nextAsset: { await timeline.neighbor(of: $0, direction: 1) },
                            previousAsset: { await timeline.neighbor(of: $0, direction: -1) },
                            onClose: { self.previewAsset = nil })
+                .transition(.opacity)
+            }
+            if let slideshowAssets {
+                SlideshowView(assets: slideshowAssets, paths: paths,
+                              onClose: { self.slideshowAssets = nil })
                 .transition(.opacity)
             }
         }
@@ -95,7 +109,8 @@ struct TimelineGridView: View {
                     MonthSliceSection(timeline: timeline, monthKey: month.key,
                                       cache: cache, paths: paths, selection: $selection, cellSize: cellSize,
                                       groupByDay: true,
-                                      onOpen: { previewAsset = $0 })
+                                      onOpen: { previewAsset = $0 },
+                                      onPlaySlideshow: startSlideshow(uuids:))
                 }
             }
             .padding(2)
@@ -111,16 +126,30 @@ struct TimelineGridView: View {
                     MonthSliceSection(timeline: timeline, monthKey: month.key,
                                       cache: cache, paths: paths, selection: $selection, cellSize: cellSize,
                                       groupByDay: false,
-                                      onOpen: { previewAsset = $0 })
+                                      onOpen: { previewAsset = $0 },
+                                      onPlaySlideshow: startSlideshow(uuids:))
                 }
             }
             .padding(2)
         }
     }
-}
 
-/// One month section of the timeline grid. Loads its slice on first appearance —
-/// this is where the parquet partition for the month is fetched (lazily).
+    private func startSlideshow(uuids: [UUID]) {
+        Task {
+            var found: [Asset] = []
+            for uuid in uuids {
+                if let asset = try? await manager.assetActions?.fetch(uuid) {
+                    found.append(asset)
+                }
+            }
+            if !found.isEmpty { slideshowAssets = found }
+        }
+    }
+
+    private func startSlideshow() {
+        startSlideshow(uuids: Array(selection))
+    }
+}
 private struct MonthSliceSection: View {
     let timeline: TimelineStore
     let monthKey: MonthKey
@@ -130,6 +159,7 @@ private struct MonthSliceSection: View {
     let cellSize: Double
     let groupByDay: Bool
     var onOpen: ((Asset) -> Void)? = nil
+    var onPlaySlideshow: (([UUID]) -> Void)? = nil
 
     private var slice: MonthSlice { timeline.slice(for: monthKey) }
 
@@ -185,7 +215,8 @@ private struct MonthSliceSection: View {
                 .draggable(dragPayload(for: asset))
                 .contextMenu {
                     AssetContextMenu(assetUUIDs: selection.contains(asset.id)
-                                     ? Array(selection) : [asset.id])
+                                     ? Array(selection) : [asset.id],
+                                     onPlaySlideshow: onPlaySlideshow)
                 }
                 .onTapGesture(count: 2) {
                     selection = [asset.id]

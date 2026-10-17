@@ -4,6 +4,7 @@ import SwiftUI
 struct AssetContextMenu: View {
     /// The full current selection (or just the clicked asset).
     let assetUUIDs: [UUID]
+    var onPlaySlideshow: (([UUID]) -> Void)? = nil
     @Environment(LibraryManager.self) private var manager
 
     var body: some View {
@@ -24,6 +25,11 @@ struct AssetContextMenu: View {
                             }
                         }
                     }
+                }
+            }
+            if let onPlaySlideshow {
+                Button(String(localized: "Play Slideshow")) {
+                    onPlaySlideshow(assetUUIDs)
                 }
             }
             Divider()

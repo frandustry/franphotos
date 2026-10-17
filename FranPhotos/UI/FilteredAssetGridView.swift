@@ -81,6 +81,7 @@ struct FilteredAssetGridView: View {
     @State private var store: FilteredAssetStore?
     @State private var selection = Set<UUID>()
     @State private var previewAsset: Asset?
+    @State private var slideshowAssets: [Asset]?
 
     var body: some View {
         Group {
@@ -93,13 +94,21 @@ struct FilteredAssetGridView: View {
                     )
                 } else {
                     AssetGridView(assets: store.assets, cache: cache, selection: $selection,
-                                  paths: paths, onOpen: { previewAsset = $0 })
+                                  paths: paths, onOpen: { previewAsset = $0 },
+                                  onPlaySlideshow: { uuids in
+                                      slideshowAssets = store.assets.filter { uuids.contains($0.id) }
+                                  })
                 }
             } else {
                 ProgressView()
             }
         }
         .overlay {
+            if let slideshowAssets {
+                SlideshowView(assets: slideshowAssets, paths: paths,
+                              onClose: { self.slideshowAssets = nil })
+                .transition(.opacity)
+            }
             if let previewAsset, let store {
                 DetailView(initialAsset: previewAsset, paths: paths,
                            nextAsset: { asset in
