@@ -9,13 +9,10 @@ struct AssetPreviewSheet: View {
     var body: some View {
         Group {
             if let paths = manager.library?.paths {
-                if asset.mediaType == .photo {
-                    HDRAssetView(asset: asset, paths: paths)
-                } else {
-                    ContentUnavailableView(
-                        "Video preview", systemImage: "play.rectangle",
-                        description: Text("Video playback arrives with the media stage."))
-                }
+                MediaStageView(asset: asset, paths: paths,
+                               autoplay: asset.mediaType == .video,
+                               muted: false,
+                               showsControls: true)
             }
         }
         .frame(minWidth: 720, minHeight: 540)
