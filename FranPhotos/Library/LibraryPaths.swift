@@ -11,7 +11,7 @@ import Foundation
 /// │   └── albums/_index.parquet + <albumUUID>.parquet
 /// ├── originals/YYYY/MM/<assetUUID>.<ext>   original media (entity copies)
 /// ├── derivatives/{thumbs,screen,edits}/…   rendered caches (regenerable)
-/// ├── faces/<personUUID>/<faceUUID>.jpg
+/// ├── faces/<faceUUID>.jpg                  face thumbnails (flat)
 /// ├── temp/
 /// └── exports/
 /// ```

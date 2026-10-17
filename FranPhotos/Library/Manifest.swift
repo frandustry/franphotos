@@ -17,7 +17,7 @@ struct LibraryManifest: Codable, Sendable, Equatable {
     var schemaVersion: Int
 
     static let currentFormatVersion = 1
-    static let currentSchemaVersion = 1
+    static let currentSchemaVersion = 2
 
     static func fresh(name: String, appVersion: String) -> LibraryManifest {
         // ISO8601 encoding has second precision; truncate so encode/decode round-trips losslessly.
