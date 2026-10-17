@@ -107,31 +107,26 @@ enum SchemaV1 {
     CREATE INDEX idx_faces_asset ON faces(asset_uuid);
     CREATE INDEX idx_faces_person ON faces(person_uuid);
 
+    -- Contentless-delete FTS5: no content duplication, plain DELETE works,
+    -- no exact-value-match requirement on delete. Column values cannot be read
+    -- back from the FTS table (rowid only) — always JOIN assets for display.
     CREATE VIRTUAL TABLE asset_fts USING fts5(
-        title, caption, keywords, filename
+        title, caption, keywords, filename,
+        content='', contentless_delete=1
     );
 
-    -- FTS sync: assets columns (title/caption/filename) via triggers.
-    -- The `keywords` FTS column is maintained by the app (keywords live in a join table).
+    -- FTS sync for asset-owned columns (title/caption/filename) via triggers.
+    -- Keywords are rebuilt from the join tables on every update, and are
+    -- additionally maintained at app level (DELETE + INSERT) when keywords change.
     CREATE TRIGGER assets_fts_ai AFTER INSERT ON assets BEGIN
         INSERT INTO asset_fts(rowid, title, caption, filename)
         VALUES (new.rowid, coalesce(new.title,''), coalesce(new.caption,''), new.filename);
     END;
     CREATE TRIGGER assets_fts_ad AFTER DELETE ON assets BEGIN
-        INSERT INTO asset_fts(asset_fts, rowid, title, caption, keywords, filename)
-        VALUES ('delete', old.rowid, coalesce(old.title,''), coalesce(old.caption,''),
-                (SELECT coalesce(group_concat(k.name, ' '), '')
-                   FROM asset_keywords ak JOIN keywords k ON k.uuid = ak.keyword_uuid
-                  WHERE ak.asset_uuid = old.uuid),
-                old.filename);
+        DELETE FROM asset_fts WHERE rowid = old.rowid;
     END;
     CREATE TRIGGER assets_fts_au AFTER UPDATE OF title, caption, filename ON assets BEGIN
-        INSERT INTO asset_fts(asset_fts, rowid, title, caption, keywords, filename)
-        VALUES ('delete', old.rowid, coalesce(old.title,''), coalesce(old.caption,''),
-                (SELECT coalesce(group_concat(k.name, ' '), '')
-                   FROM asset_keywords ak JOIN keywords k ON k.uuid = ak.keyword_uuid
-                  WHERE ak.asset_uuid = old.uuid),
-                old.filename);
+        DELETE FROM asset_fts WHERE rowid = old.rowid;
         INSERT INTO asset_fts(rowid, title, caption, keywords, filename)
         VALUES (new.rowid, coalesce(new.title,''), coalesce(new.caption,''),
                 (SELECT coalesce(group_concat(k.name, ' '), '')

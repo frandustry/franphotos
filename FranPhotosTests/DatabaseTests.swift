@@ -13,7 +13,7 @@ struct DatabaseTests {
     private func sampleAsset(uuid: UUID = UUID()) -> Asset {
         Asset(
             uuid: uuid, mediaType: .photo, capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            capturedAtTZOffset: 28800, addedAt: Date(), durationMs: nil,
+            capturedAtTZOffset: 28800, addedAt: Date(timeIntervalSince1970: 1_700_100_000), durationMs: nil,
             width: 4032, height: 3024, fileSize: 3_500_000, sha256: uuid.uuidString,
             originalRelpath: "originals/2023/11/\(uuid.uuidString).heic",
             filename: "IMG_0001.heic", uti: "public.heic",
