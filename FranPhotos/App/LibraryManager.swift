@@ -24,6 +24,53 @@ final class LibraryManager {
     var showExportSheet = false
     var showBatchAdjustSheet = false
 
+    // MARK: - Background export
+
+    var isExporting = false
+    var exportProgress: (done: Int, total: Int) = (0, 0)
+    var exportSummary: String?
+    private var exportTask: Task<Void, Never>?
+    private var exportEngine: ExportEngine?
+
+    /// Runs an export fully in the background; the sheet closes immediately and
+    /// progress shows as a non-blocking overlay. Cancellable.
+    func runExport(uuids: [UUID], options: ExportOptions, destination: URL) {
+        guard let db, let paths = library?.paths else { return }
+        let engine = ExportEngine(db: db, paths: paths)
+        exportEngine = engine
+        isExporting = true
+        exportProgress = (0, uuids.count)
+        exportSummary = nil
+        exportTask = Task.detached(priority: .userInitiated) { [weak self] in
+            let result = await engine.export(
+                uuids: uuids, destination: destination, options: options
+            ) { done, total in
+                Task { @MainActor in self?.exportProgress = (done, total) }
+            }
+            await MainActor.run {
+                guard let self else { return }
+                self.isExporting = false
+                self.exportEngine = nil
+                if result.cancelled {
+                    self.exportSummary = String(localized: "Export cancelled.")
+                } else if result.failed > 0 {
+                    self.exportSummary = String(
+                        localized: "Exported \(result.exported) item(s), \(result.failed) failed.")
+                } else {
+                    self.exportSummary = String(
+                        localized: "Exported \(result.exported) item(s).")
+                }
+            }
+        }
+    }
+
+    func cancelExport() {
+        exportTask?.cancel()
+        exportEngine?.sessionRegistry.cancelAll()
+        isExporting = false
+        exportSummary = String(localized: "Export cancelled.")
+    }
+
     private var importTask: Task<Void, Never>?
 
     var isLibraryOpen: Bool { library != nil }

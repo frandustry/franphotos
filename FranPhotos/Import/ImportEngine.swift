@@ -154,6 +154,19 @@ final class ImportEngine: @unchecked Sendable {
             }
 
             let size = (try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int64) ?? 0
+
+            // XMP/IPTC sidecar next to the source file wins for descriptive metadata.
+            var title = photoMeta.title
+            var caption = photoMeta.caption
+            var sidecarKeywords: [String] = []
+            var rating = 0
+            if let xmp = readSidecar(for: url) {
+                if let t = xmp.title { title = t }
+                if let c = xmp.caption { caption = c }
+                sidecarKeywords = xmp.keywords
+                rating = xmp.rating ?? 0
+            }
+
             let asset = Asset(
                 uuid: uuid, mediaType: .photo,
                 capturedAt: capturedAt, capturedAtTZOffset: photoMeta.tzOffsetSeconds,
@@ -162,8 +175,9 @@ final class ImportEngine: @unchecked Sendable {
                 fileSize: size, sha256: hash, originalRelpath: rel,
                 filename: url.lastPathComponent,
                 uti: utiString(for: url),
-                title: photoMeta.title, caption: photoMeta.caption,
-                isFavorite: false, isHidden: false, isDeleted: false, deletedAt: nil, rating: 0,
+                title: title, caption: caption,
+                isFavorite: false, isHidden: false, isDeleted: false, deletedAt: nil,
+                rating: rating,
                 cameraMake: photoMeta.cameraMake, cameraModel: photoMeta.cameraModel,
                 lensModel: photoMeta.lensModel, iso: photoMeta.iso,
                 aperture: photoMeta.aperture, shutterSpeed: photoMeta.shutterSpeed,
@@ -178,6 +192,9 @@ final class ImportEngine: @unchecked Sendable {
                 editRecipeJSON: nil, editVersion: 0
             )
             try await db.execute(Asset.insertSQL, asset.insertBindings)
+            if !sidecarKeywords.isEmpty {
+                try await applySidecarKeywords(sidecarKeywords, to: uuid)
+            }
             progress.completed += 1
             outcome.importedUUIDs.append(uuid)
         } catch {
@@ -288,5 +305,18 @@ final class ImportEngine: @unchecked Sendable {
 
     private func utiString(for url: URL) -> String? {
         (try? url.resourceValues(forKeys: [.typeIdentifierKey]))?.typeIdentifier
+    }
+
+    // MARK: - XMP sidecars (import)
+
+    /// Looks for `IMG_1234.xmp` next to the source file (same stem, case-insensitive ext).
+    private func readSidecar(for url: URL) -> XMP.Metadata? {
+        let sidecar = url.deletingPathExtension().appendingPathExtension("xmp")
+        return XMP.parse(url: sidecar)
+    }
+
+    private func applySidecarKeywords(_ keywords: [String], to assetUUID: UUID) async throws {
+        let actions = AssetActions(db: db)
+        try await actions.setKeywords(assetUUID, keywords: keywords)
     }
 }

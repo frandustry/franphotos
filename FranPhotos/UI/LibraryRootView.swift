@@ -115,6 +115,7 @@ struct LibraryRootView: View {
             detailView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay { if manager.isImporting { importProgressOverlay } }
+                .overlay(alignment: .bottomTrailing) { exportOverlay }
                 .onDrop(of: [.fileURL], isTargeted: $isTargetedForDrop) { providers in
                     handleDrop(providers)
                 }
@@ -209,6 +210,37 @@ struct LibraryRootView: View {
             }
         } else {
             ProgressView()
+        }
+    }
+
+    /// Non-blocking export progress: small corner card while exporting, a
+    /// dismissible summary when finished.
+    @ViewBuilder
+    private var exportOverlay: some View {
+        if manager.isExporting {
+            VStack(spacing: 8) {
+                ProgressView(
+                    value: Double(manager.exportProgress.done),
+                    total: Double(max(1, manager.exportProgress.total)))
+                Text("Exporting \(manager.exportProgress.done)/\(manager.exportProgress.total)…")
+                    .font(.caption)
+                Button(String(localized: "Cancel")) { manager.cancelExport() }
+                    .controlSize(.small)
+            }
+            .padding(14)
+            .frame(width: 220)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .padding(16)
+        } else if let summary = manager.exportSummary {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Text(summary).font(.caption)
+                Button(String(localized: "OK")) { manager.exportSummary = nil }
+                    .controlSize(.small)
+            }
+            .padding(12)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .padding(16)
         }
     }
 

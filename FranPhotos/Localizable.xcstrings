@@ -391,6 +391,16 @@
         }
       }
     },
+    "Container": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "容器格式"
+          }
+        }
+      }
+    },
     "Contrast": {
       "localizations": {
         "zh-Hans": {
@@ -581,12 +591,22 @@
         }
       }
     },
-    "Exported \\(result.exported) item(s)\\(result.failed > 0 ? \", \\(result.failed) failed\" : \"\")": {
+    "Export cancelled.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已导出 \\(result.exported) 项\\(result.failed > 0 ? \"，\\(result.failed) 项失败\" : \"\")"
+            "value": "导出已取消。"
+          }
+        }
+      }
+    },
+    "Exporting \\(manager.exportProgress.done)/\\(manager.exportProgress.total)…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在导出 \\(manager.exportProgress.done)/\\(manager.exportProgress.total)…"
           }
         }
       }
@@ -881,16 +901,6 @@
         }
       }
     },
-    "JPEG (with edits applied)": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "JPEG（应用编辑）"
-          }
-        }
-      }
-    },
     "Keyword": {
       "localizations": {
         "zh-Hans": {
@@ -1047,6 +1057,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "图库中有足够照片后，回忆会出现在这里。"
+          }
+        }
+      }
+    },
+    "Mode": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模式"
           }
         }
       }
@@ -1271,6 +1291,16 @@
         }
       }
     },
+    "Original resolution": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原始分辨率"
+          }
+        }
+      }
+    },
     "People": {
       "localizations": {
         "zh-Hans": {
@@ -1351,6 +1381,16 @@
         }
       }
     },
+    "Quality": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "质量"
+          }
+        }
+      }
+    },
     "Recently Deleted": {
       "localizations": {
         "zh-Hans": {
@@ -1397,6 +1437,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "还原"
+          }
+        }
+      }
+    },
+    "Resolution": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分辨率"
           }
         }
       }
@@ -1631,6 +1681,26 @@
         }
       }
     },
+    "Transcode": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "转码"
+          }
+        }
+      }
+    },
+    "Transcoding uses VideoToolbox hardware acceleration.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "转码使用 VideoToolbox 硬件加速。"
+          }
+        }
+      }
+    },
     "Trip": {
       "localizations": {
         "zh-Hans": {
@@ -1801,6 +1871,16 @@
         }
       }
     },
+    "Write XMP sidecar (title, caption, keywords, GPS)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "写入 XMP sidecar（标题、说明、关键词、GPS）"
+          }
+        }
+      }
+    },
     "Years": {
       "localizations": {
         "zh-Hans": {
@@ -1817,6 +1897,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "是"
+          }
+        }
+      }
+    },
+    "\\(Int(options.jpegQuality * 100))%": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\\(Int(options.jpegQuality * 100))%"
           }
         }
       }

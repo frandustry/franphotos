@@ -1,46 +1,87 @@
 import AppKit
 import SwiftUI
 
-/// Export options sheet → destination picker → progress.
+/// Export options sheet → destination picker → background export (non-blocking).
 struct ExportSheet: View {
     let uuids: [UUID]
     @Environment(LibraryManager.self) private var manager
     @Environment(\.dismiss) private var dismiss
 
     @State private var options = ExportOptions()
-    @State private var isExporting = false
-    @State private var progress: (done: Int, total: Int)?
-    @State private var result: ExportResult?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(String(localized: "Export \(uuids.count) Item(s)")).font(.headline)
-            Picker(String(localized: "Format"), selection: $options.mode) {
-                ForEach(ExportOptions.Mode.allCases, id: \.self) { mode in
-                    Text(mode.localizedName).tag(mode)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(String(localized: "Export \(uuids.count) Item(s)")).font(.headline)
+
+                GroupBox(String(localized: "Photos")) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Picker(String(localized: "Format"), selection: $options.photoFormat) {
+                            ForEach(ExportOptions.PhotoFormat.allCases, id: \.self) { format in
+                                Text(format.localizedName).tag(format)
+                            }
+                        }
+                        if options.photoFormat == .jpeg || options.photoFormat == .heic {
+                            HStack {
+                                Text(String(localized: "Quality"))
+                                Slider(value: $options.jpegQuality, in: 0.5...1)
+                                Text("\(Int(options.jpegQuality * 100))%")
+                                    .font(.caption.monospacedDigit())
+                            }
+                        }
+                        Toggle(String(localized: "Include Live Photo video component"),
+                               isOn: $options.includeLivePhotoVideo)
+                    }
+                    .padding(.vertical, 6)
+                }
+
+                GroupBox(String(localized: "Videos")) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Picker(String(localized: "Mode"), selection: $options.videoMode) {
+                            ForEach(ExportOptions.VideoMode.allCases, id: \.self) { mode in
+                                Text(mode.localizedName).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        if options.videoMode == .transcode {
+                            Picker(String(localized: "Codec"), selection: $options.videoCodec) {
+                                ForEach(ExportOptions.VideoCodec.allCases, id: \.self) { codec in
+                                    Text(codec.localizedName).tag(codec)
+                                }
+                            }
+                            Picker(String(localized: "Resolution"),
+                                   selection: $options.videoResolution) {
+                                ForEach(ExportOptions.VideoResolution.allCases, id: \.self) { res in
+                                    Text(res.localizedName).tag(res)
+                                }
+                            }
+                            Picker(String(localized: "Container"),
+                                   selection: $options.videoContainer) {
+                                ForEach(ExportOptions.VideoContainer.allCases, id: \.self) { c in
+                                    Text(c.localizedName).tag(c)
+                                }
+                            }
+                            Text("Transcoding uses VideoToolbox hardware acceleration.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+
+                Toggle(String(localized: "Write XMP sidecar (title, caption, keywords, GPS)"),
+                       isOn: $options.writeXMPSidecars)
+
+                HStack {
+                    Spacer()
+                    Button(String(localized: "Cancel")) { dismiss() }
+                    Button(String(localized: "Export…")) { runExport() }
+                        .buttonStyle(.borderedProminent)
                 }
             }
-            .pickerStyle(.radioGroup)
-            Toggle(String(localized: "Include Live Photo video component"),
-                   isOn: $options.includeLivePhotoVideo)
-            if let progress {
-                ProgressView(value: Double(progress.done),
-                             total: Double(max(progress.total, 1)))
-            }
-            if let result {
-                Text(String(localized: "Exported \(result.exported) item(s)\(result.failed > 0 ? ", \(result.failed) failed" : "")"))
-                    .foregroundStyle(.secondary)
-            }
-            HStack {
-                Spacer()
-                Button(String(localized: "Done")) { dismiss() }
-                Button(String(localized: "Export…")) { runExport() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isExporting)
-            }
+            .padding(20)
         }
-        .padding(20)
-        .frame(width: 420)
+        .frame(width: 460)
     }
 
     private func runExport() {
@@ -50,18 +91,9 @@ struct ExportSheet: View {
         panel.canCreateDirectories = true
         panel.message = String(localized: "Choose an export destination.")
         guard panel.runModal() == .OK, let destination = panel.url else { return }
-        guard let db = manager.db, let paths = manager.library?.paths else { return }
-        isExporting = true
-        Task {
-            let outcome = await ExportEngine.export(
-                uuids: uuids, db: db, paths: paths, destination: destination,
-                options: options
-            ) { done, total in
-                Task { @MainActor in progress = (done, total) }
-            }
-            result = outcome
-            isExporting = false
-        }
+        // Background: the sheet closes immediately; progress shows in the main window.
+        manager.runExport(uuids: uuids, options: options, destination: destination)
+        dismiss()
     }
 }
 
