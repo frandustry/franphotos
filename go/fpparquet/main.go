@@ -215,7 +215,7 @@ func doRead[T any](req request) any {
 	return readResponse{OK: true, Rows: rows}
 }
 
-// writeParquetFile writes rows as a snappy-compressed parquet file to path.
+// writeParquetFile writes rows as a zstd-compressed parquet file to path.
 // The write is atomic: rows go to a temp file in the same directory, which is
 // fsynced and renamed over path. Parent directories are created as needed.
 // Returns the row count and the hex SHA-256 of the file bytes.
@@ -241,7 +241,7 @@ func writeParquetFile[T any](path string, rows []T) (int, string, error) {
 	}
 
 	h := sha256.New()
-	w := parquet.NewGenericWriter[T](io.MultiWriter(tmp, h), parquet.Compression(&parquet.Snappy))
+	w := parquet.NewGenericWriter[T](io.MultiWriter(tmp, h), parquet.Compression(&parquet.Zstd))
 	if _, err := w.Write(rows); err != nil {
 		w.Close()
 		return 0, "", fmt.Errorf("write: encoding rows: %w", err)
