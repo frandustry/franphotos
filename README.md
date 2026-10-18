@@ -1,34 +1,54 @@
 # FranPhotos
 
-一个从 0 用 SwiftUI 编写的原生 macOS 照片管理应用，对标并移植 Apple Photos 的大部分核心功能。
-A native macOS photo management app written from scratch in SwiftUI, porting most core features of Apple Photos.
+**English** | [简体中文](README.zh-CN.md)
 
-## 特性 Features
+A native macOS photo management app written from scratch in SwiftUI — a clean-room
+reimagining of Apple Photos that ports most of its core features, with a tidy,
+portable library format and zero runtime dependencies.
 
-- **整洁可移植的库格式**：`*.franphotoslibrary` 包内含 SQLite 主数据库 + Parquet 快照（时间线按月分区、相簿每册一份），媒体文件实体入库，整个库文件夹即完整备份。
-- **Timeline 懒加载**：年/月/日/所有照片四级视图，滚动到哪里加载哪里的 Parquet 分区，不阻塞 UI。
-- **Live Photos**：导入自动配对（静帧 + MOV），LIVE 徽标悬停即播，交叉淡入淡出。
-- **视频无缝衔接**：海报帧开场、悬停内联静音预播、播放全程无黑帧。
-- **HDR / XDR**：识别增益图 HEIC、HLG/PQ 静态图与 HLG/Dolby Vision 视频，XDR 显示器上 EDR 渲染，普通显示器自动色调映射。
-- **完整信息面板**：EXIF（机身/镜头/ISO/光圈/快门/焦距…）+ MapKit 地图定位 + 标题/说明/关键词编辑。
-- **非破坏性编辑**：裁剪/旋转/滤镜/全套光色调整，参数存库、随时还原。
-- **相簿**：手动相簿 + 智能相簿（规则引擎）+ 内置相簿。
-- **人物 / 地点 / 回忆 / 重复检测 / 最近删除**。
-- **中英文界面**，String Catalog 驱动，可扩展更多语言。
+## Highlights
 
-## 构建 Build
+- **Clean, portable library format**: a `*.franphotoslibrary` bundle holds a SQLite
+  main database plus Parquet snapshots (timeline partitioned per month, one per
+  album). Media files are copied in as entities — the library folder is a complete,
+  self-contained backup.
+- **Lazy-loading timeline**: Years / Months / Days / All Photos zoom levels; month
+  partitions stream in from Parquet as you scroll, never blocking the UI.
+- **Live Photos**: automatic still + MOV pairing on import, hover the LIVE badge to
+  play inline, seamless crossfades.
+- **Video done right**: poster-frame first paint, muted inline hover previews, and
+  gapless still↔video transitions with zero black flashes.
+- **HDR / XDR**: detects gain-map HEIC, HLG/PQ stills and HLG/Dolby Vision videos;
+  renders with EDR on XDR displays, tone-maps gracefully on SDR ones.
+- **Full info panel**: EXIF (body/lens/ISO/aperture/shutter/focal length…), MapKit
+  location, and editable title/caption/keywords.
+- **Non-destructive editing**: crop/rotate/filters and full light & color
+  adjustments; recipes are stored in the library and always reversible.
+- **Albums**: manual albums, smart albums (rule engine), and nested folders.
+- **People, Places, Memories, duplicate detection, Recently Deleted** — the works.
+- **Bilingual UI** (English + Simplified Chinese), driven by a String Catalog with
+  room for more languages.
 
-要求：Xcode 16+（建议 27+）、Go 1.22+（仅构建期需要，运行时用户无需安装任何软件）。
+## Building
+
+Requirements: Xcode 16+ (27+ recommended) and Go 1.22+ — Go is a **build-time-only**
+dependency for the bundled Parquet helper; end users need nothing installed.
 
 ```bash
-xcodebuild -project FranPhotos.xcodeproj -scheme FranPhotos -configuration Debug build
+make build   # or: xcodebuild -project FranPhotos.xcodeproj -scheme FranPhotos build
+make test    # full test suite
 ```
 
-Go parquet 助手会在 Xcode 构建阶段自动编译并嵌入 App（源码已 vendor，离线可构建）。
+The Go `fpparquet` helper is compiled by an Xcode build phase and embedded in the
+app bundle (fully vendored — builds offline).
 
-## 文档 Docs
+## Documentation
 
-- [库格式 LIBRARY_FORMAT.md](docs/LIBRARY_FORMAT.md)
-- [数据库 SCHEMA.md](docs/SCHEMA.md)
-- [架构 ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- [HDR 渲染 HDR.md](docs/HDR.md)
+- [Library format](docs/LIBRARY_FORMAT.md)
+- [Database schema](docs/SCHEMA.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [HDR rendering](docs/HDR.md)
+
+## License
+
+[Apache-2.0](LICENSE)
