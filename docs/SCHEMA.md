@@ -1,17 +1,19 @@
-# 数据库 Schema 与 fpparquet 协议
+# Database Schema and the fpparquet Protocol
 
-本文描述 FranPhotos 库的权威元数据 schema（SQLite）与 parquet 交换协议。对应源码：
+**English** | [简体中文](SCHEMA.zh-CN.md)
 
-- `FranPhotos/Library/Database/SchemaV1.swift` — v1 全量 DDL（**永不修改，后续版本只追加迁移**）
-- `FranPhotos/Library/Database/Migrations.swift` — 有序、只追加的迁移列表
-- `go/fpparquet/schema.go`、`go/fpparquet/main.go` — parquet 行结构与 JSON-lines 协议
-- `FranPhotos/Parquet/ParquetBridge.swift`、`ParquetRowCodec.swift`、`ParquetSync.swift` — Swift 侧实现
+This document describes the authoritative metadata schema (SQLite) of a FranPhotos library and the parquet exchange protocol. Corresponding source code:
+
+- `FranPhotos/Library/Database/SchemaV1.swift` — the complete v1 DDL (**never modified; later versions only append migrations**)
+- `FranPhotos/Library/Database/Migrations.swift` — the ordered, append-only migration list
+- `go/fpparquet/schema.go`, `go/fpparquet/main.go` — parquet row structures and the JSON-lines protocol
+- `FranPhotos/Parquet/ParquetBridge.swift`, `ParquetRowCodec.swift`, `ParquetSync.swift` — Swift-side implementation
 
 ---
 
-## 迁移机制 Migrations
+## Migration Mechanism
 
-迁移运行器先建表（幂等）：
+The migration runner first creates its bookkeeping table (idempotent):
 
 ```sql
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -21,22 +23,22 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 ```
 
-`Migrations.all` 是有序数组，每个未应用的迁移在**各自独立的事务**中执行（迁移 SQL + 写入 `schema_migrations`）。`Migrations.currentVersion` 取 `SELECT COALESCE(MAX(version), 0) FROM schema_migrations`。
+`Migrations.all` is an ordered array; each unapplied migration runs in **its own transaction** (the migration SQL plus the `schema_migrations` insert). `Migrations.currentVersion` is `SELECT COALESCE(MAX(version), 0) FROM schema_migrations`.
 
-| version | name | 内容 |
+| version | name | contents |
 |---|---|---|
-| 1 | `initial schema` | `SchemaV1.sql` 全量 DDL（下文所有表） |
+| 1 | `initial schema` | full `SchemaV1.sql` DDL (all tables below) |
 | 2 | `faces_scanned flag` | `ALTER TABLE assets ADD COLUMN faces_scanned INTEGER NOT NULL DEFAULT 0;` |
 
-数据库打开时的 pragmas（`Database.init`）：`journal_mode = WAL`、`foreign_keys = ON`、`synchronous = NORMAL`、`busy_timeout = 5000`，连接带 `SQLITE_OPEN_FULLMUTEX`。
+Pragmas set when the database opens (`Database.init`): `journal_mode = WAL`, `foreign_keys = ON`, `synchronous = NORMAL`, `busy_timeout = 5000`; the connection is opened with `SQLITE_OPEN_FULLMUTEX`.
 
 ---
 
-## 表结构 Tables
+## Tables
 
 ### library_meta
 
-键值对表，存放库级状态。
+Key-value table holding library-level state.
 
 ```sql
 CREATE TABLE library_meta (
@@ -45,32 +47,32 @@ CREATE TABLE library_meta (
 );
 ```
 
-已知键：`timeline_dirty`（`"1"` = 时间线 parquet 待重建）、`memories_generated_at`（回忆上次生成时间，unix epoch 字符串）。
+Known keys: `timeline_dirty` (`"1"` = timeline parquet needs rebuilding), `memories_generated_at` (when Memories were last generated, as a unix epoch string).
 
 ### assets
 
-核心资产表，每行一张照片或一个视频。
+Core asset table; one row per photo or video.
 
 ```sql
 CREATE TABLE assets (
     uuid TEXT PRIMARY KEY,
     media_type TEXT NOT NULL CHECK (media_type IN ('photo','video')),
-    captured_at REAL NOT NULL,             -- unix epoch 秒
-    captured_at_tz_offset INTEGER,         -- 拍摄时区：GMT 以东秒数（v1 列名）
+    captured_at REAL NOT NULL,             -- unix epoch seconds
+    captured_at_tz_offset INTEGER,         -- capture time zone: seconds east of GMT (v1 column name)
     added_at REAL NOT NULL,
-    duration_ms INTEGER,                   -- 视频（含 live photo 视频组件）
+    duration_ms INTEGER,                   -- video (including the live photo video component)
     width INTEGER NOT NULL,
     height INTEGER NOT NULL,
     file_size INTEGER NOT NULL,
-    sha256 TEXT NOT NULL UNIQUE,           -- 导入去重键
-    original_relpath TEXT NOT NULL,        -- 如 originals/2025/03/<uuid>.heic
+    sha256 TEXT NOT NULL UNIQUE,           -- import dedup key
+    original_relpath TEXT NOT NULL,        -- e.g. originals/2025/03/<uuid>.heic
     filename TEXT NOT NULL,
     uti TEXT,
     title TEXT,
     caption TEXT,
     is_favorite INTEGER NOT NULL DEFAULT 0,
     is_hidden INTEGER NOT NULL DEFAULT 0,
-    is_deleted INTEGER NOT NULL DEFAULT 0, -- 1 = 最近删除（30 天后物理清除）
+    is_deleted INTEGER NOT NULL DEFAULT 0, -- 1 = recently deleted (physically purged after 30 days)
     deleted_at REAL,
     rating INTEGER NOT NULL DEFAULT 0,
     camera_make TEXT,
@@ -91,14 +93,14 @@ CREATE TABLE assets (
     color_space TEXT,
     has_audio INTEGER,
     frame_rate REAL,
-    edit_recipe_json TEXT,                 -- 编辑配方 JSON，只在主库，不进 parquet
+    edit_recipe_json TEXT,                 -- edit recipe JSON; lives only in the main database, never in parquet
     edit_version INTEGER NOT NULL DEFAULT 0
 );
--- migration v2 追加：
+-- added by migration v2:
 ALTER TABLE assets ADD COLUMN faces_scanned INTEGER NOT NULL DEFAULT 0;
 ```
 
-索引：
+Indexes:
 
 ```sql
 CREATE INDEX idx_assets_captured ON assets(captured_at);
@@ -108,7 +110,7 @@ CREATE INDEX idx_assets_geo ON assets(latitude, longitude) WHERE latitude IS NOT
 CREATE INDEX idx_assets_live ON assets(is_live_photo) WHERE is_live_photo = 1;
 ```
 
-`idx_assets_library_view` 支撑主时间线查询（排除已删除/隐藏，按拍摄时间倒序）；两个部分索引（`WHERE` 子句）只覆盖有地理位置的行和 live photo 行。
+`idx_assets_library_view` backs the main timeline query (excludes deleted/hidden, ordered by capture time descending); the two partial indexes (`WHERE` clauses) cover only rows with geolocation and live photo rows.
 
 ### albums / album_assets
 
@@ -117,7 +119,7 @@ CREATE TABLE albums (
     uuid TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     type TEXT NOT NULL CHECK (type IN ('manual','smart','builtin')),
-    smart_rules_json TEXT,                 -- 智能相簿规则（SmartRuleSet）
+    smart_rules_json TEXT,                 -- smart album rules (SmartRuleSet)
     sort_index INTEGER NOT NULL DEFAULT 0,
     cover_asset_uuid TEXT,
     created_at REAL NOT NULL DEFAULT (unixepoch('now'))
@@ -133,7 +135,7 @@ CREATE TABLE album_assets (
 CREATE INDEX idx_album_assets_asset ON album_assets(asset_uuid);
 ```
 
-### album_folders（迁移 v3）
+### album_folders (migration v3)
 
 ```sql
 CREATE TABLE album_folders (
@@ -143,18 +145,17 @@ CREATE TABLE album_folders (
     sort_index INTEGER NOT NULL DEFAULT 0,
     created_at REAL NOT NULL DEFAULT (unixepoch('now'))
 );
--- albums 增加：folder_uuid TEXT REFERENCES album_folders(uuid) ON DELETE SET NULL
+-- albums gains: folder_uuid TEXT REFERENCES album_folders(uuid) ON DELETE SET NULL
 ```
 
-相簿文件夹（嵌套用 `parent_folder_uuid`）只是组织性元数据，**不写 parquet**；
-删除文件夹会递归删除其中的相簿与子文件夹（照片本体留在图库）。
+Album folders (nested via `parent_folder_uuid`) are purely organizational metadata and are **never written to parquet**; deleting a folder recursively deletes its albums and subfolders (the photos themselves stay in the library).
 
 ### keywords / asset_keywords
 
 ```sql
 CREATE TABLE keywords (
     uuid TEXT PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE COLLATE NOCASE   -- 大小写不敏感去重
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE   -- case-insensitive dedup
 );
 
 CREATE TABLE asset_keywords (
@@ -179,16 +180,16 @@ CREATE TABLE faces (
     uuid TEXT PRIMARY KEY,
     asset_uuid TEXT NOT NULL REFERENCES assets(uuid) ON DELETE CASCADE,
     person_uuid TEXT REFERENCES persons(uuid) ON DELETE SET NULL,
-    center_x REAL NOT NULL,                -- 归一化 0..1
+    center_x REAL NOT NULL,                -- normalized 0..1
     center_y REAL NOT NULL,
-    size REAL NOT NULL,                    -- 相对 min(图宽, 图高)
+    size REAL NOT NULL,                    -- relative to min(image width, image height)
     thumbnail_relpath TEXT                 -- faces/<faceUUID>.jpg
 );
 CREATE INDEX idx_faces_asset ON faces(asset_uuid);
 CREATE INDEX idx_faces_person ON faces(person_uuid);
 ```
 
-### asset_fts（FTS5 contentless-delete 设计）
+### asset_fts (FTS5 contentless-delete design)
 
 ```sql
 CREATE VIRTUAL TABLE asset_fts USING fts5(
@@ -197,12 +198,12 @@ CREATE VIRTUAL TABLE asset_fts USING fts5(
 );
 ```
 
-**设计理由**（见 SchemaV1.swift 注释）：
+**Rationale** (see the comments in SchemaV1.swift):
 
-1. `content=''` — 不复制原始文本，FTS 索引零冗余存储。代价是**列值无法从 FTS 表读回**（只能拿到 rowid），所以搜索结果必须 `JOIN assets` 取展示数据。
-2. `contentless_delete=1` — 允许对无内容表执行**普通 `DELETE FROM asset_fts WHERE rowid = ?`**，不要求删除时提供原始列值（普通 contentless 表删除需要精确值匹配）。这使触发器可以写得极简。
+1. `content=''` — the original text is not duplicated, so the FTS index stores zero redundant data. The cost is that **column values cannot be read back from the FTS table** (only the rowid is available), so search results must `JOIN assets` to fetch display data.
+2. `contentless_delete=1` — allows a **plain `DELETE FROM asset_fts WHERE rowid = ?`** on a contentless table without supplying the original column values at delete time (a plain contentless table requires exact value matches for deletion). This keeps the triggers minimal.
 
-触发器（只同步资产自有列 title/caption/filename）：
+Triggers (sync only the asset's own columns title/caption/filename):
 
 ```sql
 CREATE TRIGGER assets_fts_ai AFTER INSERT ON assets BEGIN
@@ -223,11 +224,11 @@ CREATE TRIGGER assets_fts_au AFTER UPDATE OF title, caption, filename ON assets 
 END;
 ```
 
-**keywords 列的维护**：UPDATE 触发器会用 `group_concat` 从 `asset_keywords ⋈ keywords` 联结表**重建**整行关键词文本；而关键词本身的变更（增删）发生在 `AssetActions.setKeywords` 里，应用层在事务内对 FTS 行做显式 `DELETE + INSERT` 重写（contentless FTS 需要整行重写，不能增量改一列）。
+**Maintaining the `keywords` column**: the UPDATE trigger **rebuilds** the entire keyword text with `group_concat` over the `asset_keywords ⋈ keywords` join; keyword changes themselves (add/remove) happen in `AssetActions.setKeywords`, where the app layer performs an explicit `DELETE + INSERT` rewrite of the FTS row inside a transaction (a contentless FTS row must be rewritten wholesale — a single column cannot be updated incrementally).
 
 ### partition_checksums
 
-Parquet 分区的内容哈希登记表，是「parquet 可自愈」机制的核心（见 `ParquetSync`）。
+Content-hash registry for parquet partitions; the core of the "parquet self-healing" mechanism (see `ParquetSync`).
 
 ```sql
 CREATE TABLE partition_checksums (
@@ -239,12 +240,12 @@ CREATE TABLE partition_checksums (
 );
 ```
 
-语义：
+Semantics:
 
-- `partition_key`：时间线分区为 `timeline:YYYY-MM`（`MonthKey.parquetPartitionKey`），相簿分区为 `album:<albumUUID>`。
-- `sha256`：**内容哈希，不是文件哈希**。`ParquetSync.contentHash` 对每个资产拼接 `uuid|capturedAt(epoch秒)|editVersion|isHidden|isDeleted|isFavorite`，排序后对换行连接的串做 SHA-256（顺序无关、计算便宜）。`validateAndRepair()` 重算该哈希并与表中值比对，不一致即重建分区。
-- `row_count` / `regenerated_at`：上次重建时的行数与时间，随每次 `INSERT … ON CONFLICT(partition_key) DO UPDATE` 更新。
-- 资产清空的分区：parquet 文件删除，对应行也删除。
+- `partition_key`: `timeline:YYYY-MM` for timeline partitions (`MonthKey.parquetPartitionKey`), `album:<albumUUID>` for album partitions.
+- `sha256`: a **content hash, not a file hash**. `ParquetSync.contentHash` concatenates `uuid|capturedAt(epoch seconds)|editVersion|isHidden|isDeleted|isFavorite` for each asset, sorts them, and SHA-256-hashes the newline-joined string (order-independent and cheap to compute). `validateAndRepair()` recomputes this hash and compares it with the stored value; a mismatch triggers a partition rebuild.
+- `row_count` / `regenerated_at`: the row count and timestamp of the last rebuild, updated on every `INSERT … ON CONFLICT(partition_key) DO UPDATE`.
+- A partition whose assets are all gone: the parquet file is deleted, and so is its row.
 
 ### memories
 
@@ -254,65 +255,65 @@ CREATE TABLE memories (
     kind TEXT NOT NULL,                    -- year_highlight | trip | on_this_day
     title TEXT NOT NULL,
     key_date REAL,
-    asset_uuids_json TEXT NOT NULL,        -- UUID 字符串数组 JSON，有序
+    asset_uuids_json TEXT NOT NULL,        -- JSON array of UUID strings, ordered
     created_at REAL NOT NULL DEFAULT (unixepoch('now'))
 );
 ```
 
-由 `MemoryStore` 规则引擎生成（今年亮点 / 旅行 / 往年今日），表为空或距上次生成超过 24 小时（`library_meta.memories_generated_at`）时重建。
+Generated by the `MemoryStore` rules engine (year highlights / trips / on this day); rebuilt when the table is empty or more than 24 hours have passed since the last generation (`library_meta.memories_generated_at`).
 
 ---
 
-## fpparquet JSON-lines 协议
+## The fpparquet JSON-lines Protocol
 
-`fpparquet` 是嵌入 App 的长驻 Go 助手进程（`go/fpparquet/main.go`），经 **stdin/stdout 的 JSON Lines** 与 Swift 通信：每行一个 JSON 请求对象，每个请求严格回一行 JSON 响应并立即 flush；stdout 只写响应，诊断走 stderr；stdin 关闭即退出。协议版本 `"1"`（`ping` 响应的 `version` 字段）。
+`fpparquet` is a long-lived Go helper process embedded in the app (`go/fpparquet/main.go`), communicating with Swift via **JSON Lines over stdin/stdout**: one JSON request object per line; every request gets exactly one JSON response line, flushed immediately; stdout carries responses only, diagnostics go to stderr; the process exits when stdin closes. Protocol version `"1"` (the `version` field of the `ping` response).
 
-### 命令
+### Commands
 
 ```
 {"cmd":"ping"}                                                  → {"ok":true,"version":"1"}
 {"cmd":"write","path":"<abs>","kind":"asset|timeline_index|album_index","rows":[{...}]}
-                                                                → {"ok":true,"rows":<n>,"sha256":"<文件字节SHA256 hex>"}
+                                                                → {"ok":true,"rows":<n>,"sha256":"<SHA256 hex of file bytes>"}
 {"cmd":"read","path":"<abs>","kind":"...","offset":0,"limit":0} → {"ok":true,"rows":[{...}]}
-任何失败                                                        → {"ok":false,"error":"<message>"}
+any failure                                                     → {"ok":false,"error":"<message>"}
 ```
 
-细节：
+Details:
 
-- `path` 必须是**绝对路径**，否则报错；`write` 的 `rows` 不能为空。
-- `read` 的 `limit <= 0` 表示读全部剩余行；`offset` 越界自动截断；返回的 `rows` 永不为 null（空为 `[]`）。
-- 写入是**原子的**：写到同目录 `.fpparquet-*.tmp`，chmod 0644，fsync，close，`rename` 覆盖目标。压缩为 **Snappy**（parquet-go `parquet.Compression(&parquet.Snappy)`）。
-- `handleLine` 带 recover，内部 panic 转为 `{"ok":false,...}`，进程不死，可继续服务后续请求。
-- Swift 侧 `ParquetBridge`（actor）串行化请求；阻塞管道读写放在专用 `DispatchQueue("franphotos.fpparquet.io")`，不占协作线程池。助手查找顺序：环境变量 `FRANPHOTOS_FPPARQUET` → `Bundle.main/Resources/bin/fpparquet` → 开发 checkout 的 `go/fpparquet/bin/fpparquet`（缺失时跑 `scripts/build-go-helper.sh` 现编）。
+- `path` must be an **absolute path**, otherwise an error is returned; `write`'s `rows` must not be empty.
+- For `read`, `limit <= 0` reads all remaining rows; an out-of-range `offset` is truncated automatically; the returned `rows` is never null (`[]` when empty).
+- Writes are **atomic**: write to `.fpparquet-*.tmp` in the same directory, chmod 0644, fsync, close, then `rename` over the target. Compression is **Snappy** (parquet-go `parquet.Compression(&parquet.Snappy)`).
+- `handleLine` recovers from panics: an internal panic becomes `{"ok":false,...}`; the process survives and keeps serving subsequent requests.
+- On the Swift side, `ParquetBridge` (an actor) serializes requests; blocking pipe I/O runs on a dedicated `DispatchQueue("franphotos.fpparquet.io")`, off the cooperative thread pool. Helper lookup order: environment variable `FRANPHOTOS_FPPARQUET` → `Bundle.main/Resources/bin/fpparquet` → `go/fpparquet/bin/fpparquet` in a development checkout (built on demand via `scripts/build-go-helper.sh` if missing).
 
-### 三种 kind 的行结构（go/fpparquet/schema.go）
+### Row Structures of the Three Kinds (go/fpparquet/schema.go)
 
-Parquet 列名与 JSON 字段名完全一致（snake_case）。Go 指针字段 = parquet `optional` 列；JSON null/缺省 ↔ nil 指针。
+Parquet column names match JSON field names exactly (snake_case). A Go pointer field = a parquet `optional` column; JSON null/absent ↔ nil pointer.
 
-**asset（40 列）** — `AssetRow`：
+**asset (40 columns)** — `AssetRow`:
 
-| # | 列 | parquet 类型 | 可选 | 对应 assets 列 / 说明 |
+| # | Column | Parquet type | Optional | Corresponding assets column / notes |
 |---|---|---|---|---|
-| 1 | `uuid` | string | 否 | `uuid` |
-| 2 | `media_type` | string | 否 | `"photo"` \| `"video"` |
-| 3 | `captured_at` | int64 | 否 | unix epoch 秒 |
+| 1 | `uuid` | string | No | `uuid` |
+| 2 | `media_type` | string | No | `"photo"` \| `"video"` |
+| 3 | `captured_at` | int64 | No | unix epoch seconds |
 | 4 | `captured_at_tz` | int32 | ✅ | `captured_at_tz_offset` |
-| 5 | `added_at` | int64 | 否 | epoch 秒 |
-| 6 | `duration_ms` | int32 | ✅ | 视频时长 |
-| 7 | `width` | int32 | 否 | |
-| 8 | `height` | int32 | 否 | |
-| 9 | `file_size` | int64 | 否 | |
-| 10 | `sha256` | string | 否 | |
-| 11 | `original_relpath` | string | 否 | |
-| 12 | `filename` | string | 否 | |
-| 13 | `uti` | string | 否 | 空串表示无（Swift 读回时 `""`→nil） |
+| 5 | `added_at` | int64 | No | epoch seconds |
+| 6 | `duration_ms` | int32 | ✅ | video duration |
+| 7 | `width` | int32 | No | |
+| 8 | `height` | int32 | No | |
+| 9 | `file_size` | int64 | No | |
+| 10 | `sha256` | string | No | |
+| 11 | `original_relpath` | string | No | |
+| 12 | `filename` | string | No | |
+| 13 | `uti` | string | No | empty string means absent (on read-back Swift converts `""`→nil) |
 | 14 | `title` | string | ✅ | |
 | 15 | `caption` | string | ✅ | |
-| 16 | `is_favorite` | bool | 否 | |
-| 17 | `is_hidden` | bool | 否 | |
-| 18 | `is_deleted` | bool | 否 | |
-| 19 | `deleted_at` | int64 | ✅ | epoch 秒 |
-| 20 | `rating` | int32 | 否 | |
+| 16 | `is_favorite` | bool | No | |
+| 17 | `is_hidden` | bool | No | |
+| 18 | `is_deleted` | bool | No | |
+| 19 | `deleted_at` | int64 | ✅ | epoch seconds |
+| 20 | `rating` | int32 | No | |
 | 21 | `camera_make` | string | ✅ | |
 | 22 | `camera_model` | string | ✅ | |
 | 23 | `lens_model` | string | ✅ | |
@@ -323,20 +324,20 @@ Parquet 列名与 JSON 字段名完全一致（snake_case）。Go 指针字段 =
 | 28 | `latitude` | float64 | ✅ | |
 | 29 | `longitude` | float64 | ✅ | |
 | 30 | `altitude` | float64 | ✅ | |
-| 31 | `hdr_type` | string | 否 | `"sdr"` \| `"gainmap"` \| `"hlg"` \| `"pq"` |
-| 32 | `is_live_photo` | bool | 否 | |
+| 31 | `hdr_type` | string | No | `"sdr"` \| `"gainmap"` \| `"hlg"` \| `"pq"` |
+| 32 | `is_live_photo` | bool | No | |
 | 33 | `live_photo_video_relpath` | string | ✅ | |
 | 34 | `live_photo_still_time_ms` | int32 | ✅ | |
-| 35 | `video_codec` | string | ✅ | fourCC，如 `hvc1`/`dvhe` |
+| 35 | `video_codec` | string | ✅ | fourCC, e.g. `hvc1`/`dvhe` |
 | 36 | `color_space` | string | ✅ | |
 | 37 | `has_audio` | bool | ✅ | |
 | 38 | `frame_rate` | float64 | ✅ | |
-| 39 | `edit_version` | int32 | 否 | 编辑版本号 |
-| 40 | `album_sort_index` | int32 | 否 | 册内顺序（时间线分区中为 0） |
+| 39 | `edit_version` | int32 | No | edit version number |
+| 40 | `album_sort_index` | int32 | No | order within the album (0 in timeline partitions) |
 
-注意 **`edit_recipe_json` 不在 parquet 中**：编辑配方永不离开主库（`ParquetRowCodec.asset(from:)` 里硬编码 `editRecipeJSON: nil`）。
+Note that **`edit_recipe_json` is not in parquet**: the edit recipe never leaves the main database (`ParquetRowCodec.asset(from:)` hardcodes `editRecipeJSON: nil`).
 
-**timeline_index（6 列）** — `TimelineIndexRow`：
+**timeline_index (6 columns)** — `TimelineIndexRow`:
 
 ```go
 Month         string `parquet:"month"`           // "2025-03"
@@ -344,10 +345,10 @@ RowCount      int32  `parquet:"row_count"`
 FirstCaptured int64  `parquet:"first_captured"`
 LastCaptured  int64  `parquet:"last_captured"`
 CoverUUID     string `parquet:"cover_uuid"`
-SHA256        string `parquet:"sha256"`          // 内容哈希（来自 partition_checksums）
+SHA256        string `parquet:"sha256"`          // content hash (from partition_checksums)
 ```
 
-**album_index（6 列）** — `AlbumIndexRow`：
+**album_index (6 columns)** — `AlbumIndexRow`:
 
 ```go
 AlbumUUID string `parquet:"album_uuid"`
@@ -358,16 +359,16 @@ CoverUUID string `parquet:"cover_uuid"`
 SHA256    string `parquet:"sha256"`
 ```
 
-### 用 DuckDB 读一个月分区
+### Reading a Month Partition with DuckDB
 
 ```sql
 SELECT * FROM 'parquet/timeline/2025/2025-03.parquet';
 
--- 整条时间线（glob 通配）
+-- entire timeline (glob wildcard)
 SELECT * FROM 'parquet/timeline/*/*.parquet' ORDER BY captured_at DESC;
 
--- 时间线索引
+-- timeline index
 SELECT * FROM 'parquet/timeline/_index.parquet';
 ```
 
-（路径相对于 bundle 根目录；Snappy 解压 DuckDB 自带，无需插件。）
+(Paths are relative to the bundle root; DuckDB handles Snappy decompression natively — no plugin needed.)

@@ -1,86 +1,88 @@
-# HDR / XDR 渲染
+# HDR / XDR Rendering
 
-FranPhotos 支持三类 HDR 源（增益图 / HLG / PQ / Dolby Vision），在 XDR 显示器上以真实 EDR（Extended Dynamic Range）亮度显示，在普通显示器上自动色调映射为 SDR。核心原则：**显示只有一条代码路径**——headroom 大于 1 即 EDR，等于 1 即 SDR，无需两套实现。
+**English** | [简体中文](HDR.zh-CN.md)
 
-对应源码：`FranPhotos/Render/HDRImageView.swift`（EDRPipeline / MetalEDRView / HDRImageView）、`FranPhotos/Render/HDRCompositor.swift`、`FranPhotos/Render/Shaders.metal`、`FranPhotos/Render/ImageDecoder.swift`、`FranPhotos/Import/MetadataExtractor.swift`。
+FranPhotos supports three categories of HDR sources (gain map / HLG / PQ / Dolby Vision), displaying them at true EDR (Extended Dynamic Range) brightness on XDR displays and automatically tone-mapping them to SDR on regular displays. Core principle: **there is only one code path for display** — headroom greater than 1 means EDR, headroom equal to 1 means SDR, with no need for two separate implementations.
 
----
-
-## 1. 导入期检测 → `assets.hdr_type`
-
-检测结果入库，列有 CHECK 约束：`hdr_type ∈ {'sdr','gainmap','hlg','pq'}`（见 SCHEMA.md）。
-
-### 静态图（`ImageDecoder.inferredHDRType`，优先级：gainmap > hlg > pq > sdr）
-
-1. **增益图 gainmap**：`CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, kCGImageAuxiliaryDataTypeHDRGainMap)` 取 ISO 21496-1 / Apple HDR gain map 辅助数据；解出辅助图即判定 `.gainmap`。
-2. **HLG / PQ**：色彩空间探测——做一次 **8 像素**的缩略解码（便宜），读 `CGColorSpace.name`：
-   - 名称含 `"hlg"`（或同时含 `"2100"` 与 `"hl"`）→ `.hlg`
-   - 名称含 `"pq"` 或 `"perceptual"` → `.pq`
-3. 其余 → `.sdr`。
-
-### 视频（`MetadataExtractor.video`，AVFoundation）
-
-遍历视频轨的 `formatDescriptions`：
-
-- `kCVImageBufferTransferFunctionKey` 扩展含 `"2100"`/`hlg` → `.hlg`；含 `PQ`/`"2084"`/`perceptual` → `.pq`。
-- **Dolby Vision**：codec fourCC 以 `dvh` 开头或为 `dvhe`（`dvh1`/`dvhe` 等）→ 按 PQ 家族记 `.pq`（用于显示标记）。
-- 同时记录 `video_codec`（fourCC）、`color_space`（`kCVImageBufferColorPrimariesKey`）、`frame_rate`、`has_audio`。
+Corresponding source code: `FranPhotos/Render/HDRImageView.swift` (EDRPipeline / MetalEDRView / HDRImageView), `FranPhotos/Render/HDRCompositor.swift`, `FranPhotos/Render/Shaders.metal`, `FranPhotos/Render/ImageDecoder.swift`, `FranPhotos/Import/MetadataExtractor.swift`.
 
 ---
 
-## 2. 显示：单一路径
+## 1. Import-time detection → `assets.hdr_type`
+
+Detection results are stored in the database; the column has a CHECK constraint: `hdr_type ∈ {'sdr','gainmap','hlg','pq'}` (see SCHEMA.md).
+
+### Still images (`ImageDecoder.inferredHDRType`; priority: gainmap > hlg > pq > sdr)
+
+1. **Gain map**: `CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, kCGImageAuxiliaryDataTypeHDRGainMap)` retrieves the ISO 21496-1 / Apple HDR gain map auxiliary data; if the auxiliary image is successfully decoded, the asset is classified as `.gainmap`.
+2. **HLG / PQ**: color-space probing — perform an **8-pixel** thumbnail decode (cheap) and read `CGColorSpace.name`:
+   - Name contains `"hlg"` (or contains both `"2100"` and `"hl"`) → `.hlg`
+   - Name contains `"pq"` or `"perceptual"` → `.pq`
+3. Everything else → `.sdr`.
+
+### Video (`MetadataExtractor.video`, AVFoundation)
+
+Iterate the video track's `formatDescriptions`:
+
+- `kCVImageBufferTransferFunctionKey` extension containing `"2100"`/`hlg` → `.hlg`; containing `PQ`/`"2084"`/`perceptual` → `.pq`.
+- **Dolby Vision**: codec fourCC starting with `dvh` or equal to `dvhe` (`dvh1`/`dvhe`, etc.) → recorded as `.pq` of the PQ family (for display labeling).
+- Also records `video_codec` (fourCC), `color_space` (`kCVImageBufferColorPrimariesKey`), `frame_rate`, and `has_audio`.
+
+---
+
+## 2. Display: a single path
 
 ```
-原图解码（最长边 8000px 上限，HDRAssetView.maxDecodePixels）
-  → CIImage base (+ gainMap CIImage，若 hdr_type == gainmap)
+Decode original image (longest edge capped at 8000px, HDRAssetView.maxDecodePixels)
+  → CIImage base (+ gainMap CIImage, if hdr_type == gainmap)
   → HDRCompositor.composited(base, gainMap, headroom)
         = base.applyingGainMap(gainMap, headroom: clamp(headroom, 1...8))
-        （HLG/PQ 源无增益图，原样返回——由其色彩空间驱动解释）
-  → EDRPipeline.render：CIImage 渲染进 CVPixelBuffer
-        （kCVPixelFormatType_64RGBAHalf + MetalCompatibility，
-          extended-linear Display P3 色彩空间，aspect-fit 到黑底画布）
+        (HLG/PQ sources have no gain map — returned as-is; interpretation is driven by their color space)
+  → EDRPipeline.render: render the CIImage into a CVPixelBuffer
+        (kCVPixelFormatType_64RGBAHalf + MetalCompatibility,
+          extended-linear Display P3 color space, aspect-fit onto a black canvas)
   → CVMetalTextureCacheCreateTextureFromImage → MTLTexture(rgba16Float)
-  → 全屏三角形 blit（Shaders.metal: edrBlitVS / edrBlitFS，采样直写不做变换）
-  → CAMetalLayer：pixelFormat = rgba16Float，
-                  wantsExtendedDynamicRangeContent = true，
+  → Full-screen triangle blit (Shaders.metal: edrBlitVS / edrBlitFS, sampled and written straight through with no transform)
+  → CAMetalLayer: pixelFormat = rgba16Float,
+                  wantsExtendedDynamicRangeContent = true,
                   colorspace = extendedLinearDisplayP3
 ```
 
-关键组件：
+Key components:
 
-- **headroom 来源**：`NSScreen.maximumExtendedDynamicRangeColorComponentValue`，下限 1.0（`MetalEDRView.render()` 与 `HDRCompositor.edrHeadroom(for:)`）。XDR 屏上 > 1，extended-linear 空间中超过 1.0 的像素值产生真实 HDR 亮度。
-- **SDR 回退 = 同一条路径**：SDR 屏 headroom = 1，`applyingGainMap(headroom: 1)` 即色调映射后的 SDR。一条路径，两种输出。
-- **CIContext**：`HDRCompositor.sharedContext`，`CIContext(mtlDevice:)` + `cacheIntermediates: false`，全局复用（创建昂贵）。
-- **共享 Metal pipeline**：`EDRPipeline` 持有 device / commandQueue / `CVMetalTextureCache` / render pipeline（`rgba16Float` color attachment）；`MetalEDRView` 用 `nextDrawable()` 取 drawable 渲染后 `present`。
-- **屏幕变更重渲染**：监听 `NSWindow.didChangeScreenNotification`，窗口移到 headroom 不同的屏幕时重取 headroom 并重渲染；`setFrameSize` / `viewDidMoveToWindow` 同样触发。
-- **SwiftUI 接入**：`HDRImageView`（NSViewRepresentable），`imageProvider: (Float) -> CIImage?` 按请求的 headroom 供图；`contentVersion`（= `asset.editVersion`）变化强制重载。
+- **Headroom source**: `NSScreen.maximumExtendedDynamicRangeColorComponentValue`, with a floor of 1.0 (`MetalEDRView.render()` and `HDRCompositor.edrHeadroom(for:)`). It is > 1 on XDR screens, where pixel values above 1.0 in the extended-linear space produce true HDR brightness.
+- **SDR fallback = the same path**: on SDR screens headroom = 1, and `applyingGainMap(headroom: 1)` yields the tone-mapped SDR output. One path, two outputs.
+- **CIContext**: `HDRCompositor.sharedContext`, `CIContext(mtlDevice:)` + `cacheIntermediates: false`, reused globally (expensive to create).
+- **Shared Metal pipeline**: `EDRPipeline` holds the device / commandQueue / `CVMetalTextureCache` / render pipeline (`rgba16Float` color attachment); `MetalEDRView` obtains a drawable with `nextDrawable()`, renders into it, then `present`s it.
+- **Re-render on screen change**: listens for `NSWindow.didChangeScreenNotification`; when the window moves to a screen with a different headroom, re-reads the headroom and re-renders; `setFrameSize` / `viewDidMoveToWindow` trigger this as well.
+- **SwiftUI integration**: `HDRImageView` (NSViewRepresentable); `imageProvider: (Float) -> CIImage?` supplies the image at the requested headroom; changes to `contentVersion` (= `asset.editVersion`) force a reload.
 
-### 为什么不用 CIRenderDestination(mtlTexture:)
+### Why not CIRenderDestination(mtlTexture:)
 
-`HDRImageView.swift` 顶部注释记录了实测结论：`CIRenderDestination(mtlTexture:)` **在 macOS 27 上返回 nil**，且 `CIContext.render(_:to:commandBuffer:bounds:colorSpace:)` 对普通 MTLTexture 不写任何像素。因此采用显式的「pixel buffer + 全屏 blit」管线——该路径已端到端验证可以输出 > 1.0 的像素值。
-
----
-
-## 3. 派生图一律 SDR（网格不发灰）
-
-`DerivativeCache` 渲染缩略图 / 屏幕图时走 `HDRCompositor.sdrImage(from:hdrType:maxPixelSize:)`：增益图源以 **headroom = 1.0** 应用增益图，再以 `RGBA8 + sRGB` 落 JPEG。**所有派生图都是色调映射后的 SDR**，因此网格、封面、相簿卡片在任何屏幕上都不会发灰或溢出。键含 `-e<editVersion>`，编辑后自动失效重建。
+The header comment of `HDRImageView.swift` records the measured findings: `CIRenderDestination(mtlTexture:)` **returns nil on macOS 27**, and `CIContext.render(_:to:commandBuffer:bounds:colorSpace:)` writes no pixels into an ordinary MTLTexture. Hence the explicit "pixel buffer + full-screen blit" pipeline — this path has been verified end to end to output pixel values > 1.0.
 
 ---
 
-## 4. 编辑：v1 为 SDR 域
+## 3. Derivatives are always SDR (the grid never washes out)
 
-- 编辑（`EditEngine`）是纯 CoreImage 配方（`EditRecipe` JSON 存 `assets.edit_recipe_json`），渲染结果为 sRGB JPEG：`derivatives/edits/<uuid>/v<version>.jpg`。
-- 已编辑资产的详情视图与网格都显示**编辑产物**（SDR）；`HDRAssetView` / `DerivativeCache` 在 `editDerivativeURL != nil` 时把 `hdrType` 视为 `.sdr`。
-- **原片保持不动**：HDR 信息（增益图 / HLG / PQ）完整保留在 `originals/` 里，可随时还原；导出时：
-  - `ExportOptions.Mode.original` — 逐字节拷贝原片（增益图等完整保留），live photo 附带视频组件；
-  - `.jpeg` — 应用编辑 / 色调映射后输出 SDR JPEG（视频导出海报复位帧）。
-
-即：**编辑在 SDR 域进行（v1 取舍），HDR 保真由「原片不动 + 原片导出」保证。**
+When rendering thumbnails / screen-sized images, `DerivativeCache` goes through `HDRCompositor.sdrImage(from:hdrType:maxPixelSize:)`: gain-map sources have the gain map applied at **headroom = 1.0**, then are written to JPEG as `RGBA8 + sRGB`. **All derivatives are tone-mapped SDR**, so the grid, covers, and album cards never look washed out or blown out on any screen. Keys include `-e<editVersion>`, so they are automatically invalidated and rebuilt after edits.
 
 ---
 
-## 5. 视频
+## 4. Editing: the SDR domain in v1
 
-视频不做自绘渲染：`AVPlayer` + `VideoLayerView`（AVFoundation 管线）原生处理 HLG / Dolby Vision 的 EDR 输出。静帧↔视频衔接由 `MediaStageController` 完成：预热时在视频层不可见状态下精确 seek 到静帧时刻（live photo 用 `live_photo_still_time_ms`），第一帧与静帧像素对齐，交叉淡入淡出无黑帧。`PlayerPool`（LRU，容量 3）限制同时存活的解码器数量。
+- Editing (`EditEngine`) is a pure CoreImage recipe (`EditRecipe` JSON stored in `assets.edit_recipe_json`); the rendered result is an sRGB JPEG: `derivatives/edits/<uuid>/v<version>.jpg`.
+- Both the detail view and the grid of an edited asset display the **edited derivative** (SDR); `HDRAssetView` / `DerivativeCache` treat `hdrType` as `.sdr` whenever `editDerivativeURL != nil`.
+- **The original is never touched**: HDR information (gain map / HLG / PQ) is fully preserved in `originals/` and can be restored at any time; on export:
+  - `ExportOptions.Mode.original` — a byte-for-byte copy of the original (gain map etc. fully preserved); live photos also include the video component;
+  - `.jpeg` — an SDR JPEG with edits / tone mapping applied (videos export the poster still frame).
 
-海报帧（网格/详情占位）由 `DerivativeCache.videoPoster` 用 `AVAssetImageGenerator` 抽取——live photo 取静帧时刻，普通视频取第 0 帧——再按第 3 节规则落成 SDR JPEG。
+In short: **editing happens in the SDR domain (a v1 trade-off); HDR fidelity is guaranteed by "original untouched + original-as-is export".**
+
+---
+
+## 5. Video
+
+Video uses no custom rendering: `AVPlayer` + `VideoLayerView` (the AVFoundation pipeline) natively handle EDR output for HLG / Dolby Vision. Still↔video transitions are handled by `MediaStageController`: during warm-up it seeks precisely to the still-image moment while the video layer is invisible (live photos use `live_photo_still_time_ms`), so the first frame aligns pixel-perfectly with the still and the crossfade has no black frames. `PlayerPool` (LRU, capacity 3) limits the number of simultaneously live decoders.
+
+Poster frames (grid/detail placeholders) are extracted by `DerivativeCache.videoPoster` using `AVAssetImageGenerator` — live photos take the still-image moment, regular videos take frame 0 — and are then written as SDR JPEGs per the rules in Section 3.

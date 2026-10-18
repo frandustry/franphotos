@@ -30,10 +30,10 @@ Go parquet 助手会在 Xcode 构建阶段自动编译并嵌入 App（源码已 
 
 ## 文档
 
-- [库格式 LIBRARY_FORMAT.md](docs/LIBRARY_FORMAT.md)
-- [数据库 SCHEMA.md](docs/SCHEMA.md)
-- [架构 ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- [HDR 渲染 HDR.md](docs/HDR.md)
+- [库格式 LIBRARY_FORMAT.zh-CN.md](docs/LIBRARY_FORMAT.zh-CN.md)
+- [数据库 SCHEMA.zh-CN.md](docs/SCHEMA.zh-CN.md)
+- [架构 ARCHITECTURE.zh-CN.md](docs/ARCHITECTURE.zh-CN.md)
+- [HDR 渲染 HDR.zh-CN.md](docs/HDR.zh-CN.md)
 
 ## 许可证
 
