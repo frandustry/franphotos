@@ -31,6 +31,7 @@ private struct PlacesMapView: View {
 
     @State private var position: MapCameraPosition = .automatic
     @State private var span = MKCoordinateSpan(latitudeDelta: 20, longitudeDelta: 20)
+    @State private var didFitInitialRegion = false
     @State private var popoverAsset: Asset?
     @State private var detailAsset: Asset?
 
@@ -68,7 +69,20 @@ private struct PlacesMapView: View {
             }
         }
         .onMapCameraChange(frequency: .onEnd) { context in
-            span = context.region.span
+            // Update the clustering span only on *material* zoom changes.
+            // Unconditional updates closed a feedback loop: span change →
+            // cluster rebuild → annotation reload → automatic camera refit →
+            // camera-change callback → span change… (main thread pegged at
+            // 100% CPU, effectively a hang).
+            let newSpan = context.region.span
+            guard newSpan.latitudeDelta.isFinite, newSpan.latitudeDelta > 0 else { return }
+            let ratio = newSpan.latitudeDelta / max(span.latitudeDelta, .ulpOfOne)
+            if ratio < 0.92 || ratio > 1.08 {
+                span = newSpan
+            }
+        }
+        .onChange(of: store.isLoaded) { _, loaded in
+            if loaded { fitInitialRegion() }
         }
         .overlay(alignment: .bottom) {
             if store.isLoaded && store.assets.isEmpty {
@@ -100,6 +114,32 @@ private struct PlacesMapView: View {
         .task {
             await store.reload()
         }
+    }
+
+    /// One-time camera fit over all geo-tagged assets, then the position
+    /// becomes a fixed region so annotation changes never re-frame the camera
+    /// (another arm of the feedback loop described above).
+    private func fitInitialRegion() {
+        guard !didFitInitialRegion else { return }
+        let coords: [CLLocationCoordinate2D] = store.assets.compactMap { asset in
+            guard let lat = asset.latitude, let lon = asset.longitude else { return nil }
+            return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+        }
+        guard let first = coords.first else { return }
+        didFitInitialRegion = true
+        var minLat = first.latitude, maxLat = first.latitude
+        var minLon = first.longitude, maxLon = first.longitude
+        for c in coords {
+            minLat = min(minLat, c.latitude); maxLat = max(maxLat, c.latitude)
+            minLon = min(minLon, c.longitude); maxLon = max(maxLon, c.longitude)
+        }
+        let center = CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2,
+                                            longitude: (minLon + maxLon) / 2)
+        let fitted = MKCoordinateSpan(
+            latitudeDelta: max((maxLat - minLat) * 1.3, 0.02),
+            longitudeDelta: max((maxLon - minLon) * 1.3, 0.02))
+        span = fitted
+        position = .region(MKCoordinateRegion(center: center, span: fitted))
     }
 
     // MARK: - Annotations
