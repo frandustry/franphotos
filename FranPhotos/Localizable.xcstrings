@@ -171,6 +171,16 @@
         }
       }
     },
+    "Albums and folders inside it will be deleted. Your photos stay in the library.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其中的相簿和文件夹将被删除，照片仍保留在图库中。"
+          }
+        }
+      }
+    },
     "All": {
       "localizations": {
         "zh-Hans": {
@@ -511,6 +521,26 @@
         }
       }
     },
+    "Delete Folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除文件夹"
+          }
+        }
+      }
+    },
+    "Delete Folder?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除文件夹？"
+          }
+        }
+      }
+    },
     "Delete Permanently?": {
       "localizations": {
         "zh-Hans": {
@@ -551,6 +581,16 @@
         }
       }
     },
+    "Drag albums here from the sidebar.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从边栏将相簿拖到此处。"
+          }
+        }
+      }
+    },
     "Dramatic": {
       "localizations": {
         "zh-Hans": {
@@ -587,6 +627,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "编辑"
+          }
+        }
+      }
+    },
+    "Empty Folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空文件夹"
           }
         }
       }
@@ -737,6 +787,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "焦距"
+          }
+        }
+      }
+    },
+    "Folder Name": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件夹名称"
           }
         }
       }
@@ -1141,6 +1201,16 @@
         }
       }
     },
+    "New Folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建文件夹"
+          }
+        }
+      }
+    },
     "New Smart Album": {
       "localizations": {
         "zh-Hans": {
@@ -1157,6 +1227,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "新建智能相簿…"
+          }
+        }
+      }
+    },
+    "New Subfolder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建子文件夹"
           }
         }
       }
@@ -1431,12 +1511,52 @@
         }
       }
     },
+    "Remove from Folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从文件夹中移除"
+          }
+        }
+      }
+    },
     "Remove from Person": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "从人物中移除"
+          }
+        }
+      }
+    },
+    "Rename": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重命名"
+          }
+        }
+      }
+    },
+    "Rename Folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重命名文件夹"
+          }
+        }
+      }
+    },
+    "Rename Folder…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重命名文件夹…"
           }
         }
       }
@@ -1771,6 +1891,16 @@
         }
       }
     },
+    "Untitled Folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未命名文件夹"
+          }
+        }
+      }
+    },
     "Utilities": {
       "localizations": {
         "zh-Hans": {
@@ -1921,12 +2051,32 @@
         }
       }
     },
+    "\\(childCount) items": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\\(childCount) 个项目"
+          }
+        }
+      }
+    },
     "\\(cluster.assets.count)": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "\\(cluster.assets.count)"
+          }
+        }
+      }
+    },
+    "\\(counts[album.uuid] ?? 0) items": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\\(counts[album.uuid] ?? 0) 个项目"
           }
         }
       }

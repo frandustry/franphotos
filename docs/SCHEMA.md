@@ -133,6 +133,22 @@ CREATE TABLE album_assets (
 CREATE INDEX idx_album_assets_asset ON album_assets(asset_uuid);
 ```
 
+### album_folders（迁移 v3）
+
+```sql
+CREATE TABLE album_folders (
+    uuid TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    parent_folder_uuid TEXT REFERENCES album_folders(uuid) ON DELETE CASCADE,
+    sort_index INTEGER NOT NULL DEFAULT 0,
+    created_at REAL NOT NULL DEFAULT (unixepoch('now'))
+);
+-- albums 增加：folder_uuid TEXT REFERENCES album_folders(uuid) ON DELETE SET NULL
+```
+
+相簿文件夹（嵌套用 `parent_folder_uuid`）只是组织性元数据，**不写 parquet**；
+删除文件夹会递归删除其中的相簿与子文件夹（照片本体留在图库）。
+
 ### keywords / asset_keywords
 
 ```sql

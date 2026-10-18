@@ -4,6 +4,7 @@ enum SidebarItem: Hashable {
     case section(LibrarySection)
     case utility(UtilitySection)
     case album(UUID)
+    case folder(UUID)
 
     enum UtilitySection: String, CaseIterable {
         case hidden, recentlyDeleted, duplicates
@@ -63,6 +64,15 @@ struct LibraryRootView: View {
     @State private var showSmartAlbumSheet = false
     @State private var newAlbumName = ""
     @State private var searchText = ""
+    /// Expanded folder ids in the My Albums tree.
+    @State private var expandedFolders: Set<UUID> = []
+    @State private var showNewFolderSheet = false
+    @State private var newFolderName = ""
+    /// When set, the next created album/folder lands inside this folder.
+    @State private var targetFolderUUID: UUID?
+    @State private var renamingFolder: AlbumFolder?
+    @State private var renameFolderName = ""
+    @State private var folderToDelete: AlbumFolder?
 
     var body: some View {
         NavigationSplitView {
@@ -80,27 +90,36 @@ struct LibraryRootView: View {
                     }
                 }
                 Section {
-                    ForEach(manager.albumsStore?.albums ?? []) { album in
-                        Label(album.name,
-                              systemImage: album.type == .smart ? "gearshape" : "rectangle.stack")
-                            .tag(SidebarItem.album(album.uuid))
-                            .dropDestination(for: String.self) { payloads, _ in
-                                handleAssetDrop(payloads, onto: album.uuid)
-                            }
-                            .contextMenu {
-                                Button(String(localized: "Delete Album"), role: .destructive) {
-                                    Task { await manager.albumsStore?.delete(album.uuid) }
-                                }
-                            }
+                    let folders = manager.albumsStore?.folders ?? []
+                    let albums = manager.albumsStore?.albums ?? []
+                    ForEach(folders.filter { $0.parentFolderUUID == nil }) { folder in
+                        FolderSidebarRow(
+                            folder: folder, depth: 0, folders: folders, albums: albums,
+                            expandedFolders: $expandedFolders,
+                            onNewAlbum: { targetFolderUUID = $0; newAlbumName = ""; showNewAlbumSheet = true },
+                            onNewSubfolder: { targetFolderUUID = $0; newFolderName = ""; showNewFolderSheet = true },
+                            onRename: { renamingFolder = $0 },
+                            onDelete: { folderToDelete = $0 })
+                    }
+                    ForEach(albums.filter { $0.folderUUID == nil }) { album in
+                        AlbumSidebarRow(album: album, depth: 0)
                     }
                 } header: {
                     HStack {
                         Text("My Albums")
                         Spacer()
                         Menu {
-                            Button(String(localized: "New Album")) { showNewAlbumSheet = true }
+                            Button(String(localized: "New Album")) {
+                                targetFolderUUID = nil
+                                showNewAlbumSheet = true
+                            }
                             Button(String(localized: "New Smart Album…")) {
                                 showSmartAlbumSheet = true
+                            }
+                            Button(String(localized: "New Folder")) {
+                                targetFolderUUID = nil
+                                newFolderName = ""
+                                showNewFolderSheet = true
                             }
                         } label: {
                             Image(systemName: "plus")
@@ -127,6 +146,25 @@ struct LibraryRootView: View {
         }
         .sheet(isPresented: $showNewAlbumSheet) {
             newAlbumSheet
+        }
+        .sheet(isPresented: $showNewFolderSheet) {
+            newFolderSheet
+        }
+        .sheet(item: $renamingFolder) { folder in
+            renameFolderSheet(folder)
+        }
+        .alert(String(localized: "Delete Folder?"),
+               isPresented: Binding(get: { folderToDelete != nil },
+                                    set: { if !$0 { folderToDelete = nil } })) {
+            Button(String(localized: "Delete"), role: .destructive) {
+                if let folder = folderToDelete {
+                    Task { await manager.albumsStore?.deleteFolder(folder.uuid) }
+                }
+                folderToDelete = nil
+            }
+            Button(String(localized: "Cancel"), role: .cancel) { folderToDelete = nil }
+        } message: {
+            Text(String(localized: "Albums and folders inside it will be deleted. Your photos stay in the library."))
         }
         .sheet(isPresented: $showSmartAlbumSheet) {
             SmartAlbumEditorView { name, rules in
@@ -158,10 +196,13 @@ struct LibraryRootView: View {
                 }
                 Button(String(localized: "Create")) {
                     let name = newAlbumName.trimmingCharacters(in: .whitespaces)
+                    let folder = targetFolderUUID
                     Task {
                         _ = await manager.albumsStore?.createAlbum(
-                            name: name.isEmpty ? String(localized: "Untitled Album") : name)
+                            name: name.isEmpty ? String(localized: "Untitled Album") : name,
+                            in: folder)
                         newAlbumName = ""
+                        targetFolderUUID = nil
                         showNewAlbumSheet = false
                     }
                 }
@@ -170,6 +211,62 @@ struct LibraryRootView: View {
         }
         .padding(20)
         .frame(width: 320)
+    }
+
+    private var newFolderSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("New Folder").font(.headline)
+            TextField(String(localized: "Folder Name"), text: $newFolderName)
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Spacer()
+                Button(String(localized: "Cancel")) {
+                    showNewFolderSheet = false
+                    newFolderName = ""
+                    targetFolderUUID = nil
+                }
+                Button(String(localized: "Create")) {
+                    let name = newFolderName.trimmingCharacters(in: .whitespaces)
+                    let parent = targetFolderUUID
+                    Task {
+                        _ = await manager.albumsStore?.createFolder(
+                            name: name.isEmpty ? String(localized: "Untitled Folder") : name,
+                            parent: parent)
+                        newFolderName = ""
+                        targetFolderUUID = nil
+                        showNewFolderSheet = false
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(20)
+        .frame(width: 320)
+    }
+
+    private func renameFolderSheet(_ folder: AlbumFolder) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Rename Folder").font(.headline)
+            TextField(String(localized: "Folder Name"), text: $renameFolderName)
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Spacer()
+                Button(String(localized: "Cancel")) { renamingFolder = nil }
+                Button(String(localized: "Rename")) {
+                    let name = renameFolderName.trimmingCharacters(in: .whitespaces)
+                    Task {
+                        if !name.isEmpty {
+                            await manager.albumsStore?.renameFolder(folder.uuid, to: name)
+                        }
+                        renamingFolder = nil
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(20)
+        .frame(width: 320)
+        .onAppear { renameFolderName = folder.name }
     }
 
     @ViewBuilder
@@ -206,6 +303,10 @@ struct LibraryRootView: View {
             case .album(let uuid):
                 FilteredAssetGridView(cache: cache, db: db, paths: paths,
                                       filter: .init(kind: .album(uuid)))
+            case .folder(let uuid):
+                FolderContentsView(folderUUID: uuid, db: db, cache: cache,
+                                   onOpenAlbum: { selection = .album($0) },
+                                   onOpenFolder: { selection = .folder($0) })
                 }
             }
         } else {
@@ -261,6 +362,7 @@ struct LibraryRootView: View {
         .padding(40)
     }
 
+    /// Files dropped onto the window import into the library.
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         var urls: [URL] = []
         let group = DispatchGroup()
@@ -273,17 +375,6 @@ struct LibraryRootView: View {
         }
         group.notify(queue: .main) {
             manager.importFiles(urls)
-        }
-        return true
-    }
-
-    /// Grid cells drag comma-separated UUID strings; dropping onto an album adds them.
-    private func handleAssetDrop(_ payloads: [String], onto albumUUID: UUID) -> Bool {
-        let uuids = payloads.flatMap { $0.split(separator: ",") }
-            .compactMap { UUID(uuidString: String($0)) }
-        guard !uuids.isEmpty else { return false }
-        Task {
-            await manager.albumsStore?.add(uuids, to: albumUUID)
         }
         return true
     }

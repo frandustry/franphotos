@@ -105,3 +105,69 @@ struct AlbumStoreTests {
         #expect(FileManager.default.fileExists(atPath: store.paths.albumsIndexParquet.path))
     }
 }
+
+extension AlbumStoreTests {
+    @Test func folderCRUDAndNesting() async throws {
+        let (_, db, dir) = try await makeLibrary()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = AlbumStore(db: db)
+
+        // Create a top-level folder, a subfolder, and albums filed into each.
+        let trips = try await store.createFolder(name: "Trips")
+        let japan = try await store.createFolder(name: "Japan", parent: trips.uuid)
+        let topAlbum = try await store.createAlbum(name: "Loose", in: nil)
+        let tripAlbum = try await store.createAlbum(name: "2024", in: trips.uuid)
+        let japanAlbum = try await store.createAlbum(name: "Kyoto", in: japan.uuid)
+
+        let folders = try await store.folders()
+        #expect(folders.count == 2)
+        #expect(folders.first(where: { $0.uuid == japan.uuid })?.parentFolderUUID == trips.uuid)
+
+        let albums = try await store.albums()
+        #expect(albums.first(where: { $0.uuid == topAlbum.uuid })?.folderUUID == nil)
+        #expect(albums.first(where: { $0.uuid == tripAlbum.uuid })?.folderUUID == trips.uuid)
+        #expect(albums.first(where: { $0.uuid == japanAlbum.uuid })?.folderUUID == japan.uuid)
+
+        // Move an album between folders / back to top level.
+        try await store.moveAlbum(topAlbum.uuid, toFolder: japan.uuid)
+        #expect(try await store.album(topAlbum.uuid)?.folderUUID == japan.uuid)
+        try await store.moveAlbum(topAlbum.uuid, toFolder: nil)
+        #expect(try await store.album(topAlbum.uuid)?.folderUUID == nil)
+
+        // Rename a folder.
+        try await store.renameFolder(trips.uuid, to: "Travel")
+        #expect(try await store.folders().first(where: { $0.uuid == trips.uuid })?.name == "Travel")
+    }
+
+    @Test func deleteFolderRecursivelyDeletesContentsButKeepsAssets() async throws {
+        let (_, db, dir) = try await makeLibrary()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = AlbumStore(db: db)
+
+        let outer = try await store.createFolder(name: "Outer")
+        let inner = try await store.createFolder(name: "Inner", parent: outer.uuid)
+        let albumInInner = try await store.createAlbum(name: "A", in: inner.uuid)
+        let albumInOuter = try await store.createAlbum(name: "B", in: outer.uuid)
+        let survivor = try await store.createAlbum(name: "Keep", in: nil)
+        let assetID = try await insertAsset(db)
+        try await store.add([assetID], to: albumInInner.uuid)
+
+        let deletedAlbums = try await store.deleteFolderRecursively(outer.uuid)
+        #expect(Set(deletedAlbums) == Set([albumInInner.uuid, albumInOuter.uuid]))
+        #expect(try await store.folders().isEmpty)
+        #expect(try await store.albums().map(\.uuid) == [survivor.uuid])
+        // The asset itself is untouched (folders/albums never own assets).
+        #expect(try await db.scalarInt("SELECT COUNT(*) FROM assets WHERE uuid = ?",
+                                       [.text(assetID.uuidString)]) == 1)
+    }
+
+    /// Existing v2 libraries gain the folder columns via migration v3.
+    @Test func migrationV3AddsFolderSupport() async throws {
+        let (_, db, dir) = try await makeLibrary()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        #expect(try await db.scalarInt(
+            "SELECT COALESCE(MAX(version), 0) FROM schema_migrations") >= 3)
+        let cols = try await db.query("PRAGMA table_info(albums)")
+        #expect(cols.contains { $0.text("name") == "folder_uuid" })
+    }
+}

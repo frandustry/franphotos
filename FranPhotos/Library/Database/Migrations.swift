@@ -13,6 +13,17 @@ enum Migrations {
         Migration(version: 2, name: "faces_scanned flag", sql: """
             ALTER TABLE assets ADD COLUMN faces_scanned INTEGER NOT NULL DEFAULT 0;
             """),
+        Migration(version: 3, name: "album folders", sql: """
+            CREATE TABLE album_folders (
+                uuid TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                parent_folder_uuid TEXT REFERENCES album_folders(uuid) ON DELETE CASCADE,
+                sort_index INTEGER NOT NULL DEFAULT 0,
+                created_at REAL NOT NULL DEFAULT (unixepoch('now'))
+            );
+            ALTER TABLE albums ADD COLUMN folder_uuid TEXT
+                REFERENCES album_folders(uuid) ON DELETE SET NULL;
+            """),
     ]
 
     /// Applies all pending migrations, each in its own transaction.

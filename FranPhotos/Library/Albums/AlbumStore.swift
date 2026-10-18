@@ -59,16 +59,20 @@ struct AlbumStore: Sendable {
     // MARK: - Create / update / delete
 
     @discardableResult
-    func createAlbum(name: String, rules: SmartRuleSet? = nil) async throws -> Album {
+    func createAlbum(name: String, rules: SmartRuleSet? = nil,
+                     in folderUUID: UUID? = nil) async throws -> Album {
         let album = Album(
             uuid: UUID(), name: name,
             type: rules == nil ? .manual : .smart,
             smartRulesJSON: rules.flatMap { try? String(decoding: JSONEncoder().encode($0), as: UTF8.self) },
-            sortIndex: 0, coverAssetUUID: nil)
+            sortIndex: 0, coverAssetUUID: nil, folderUUID: folderUUID)
         try await db.execute(
-            "INSERT INTO albums(uuid, name, type, smart_rules_json, sort_index) VALUES (?, ?, ?, ?, 0)",
+            """
+            INSERT INTO albums(uuid, name, type, smart_rules_json, sort_index, folder_uuid)
+            VALUES (?, ?, ?, ?, 0, ?)
+            """,
             [.text(album.uuid.uuidString), .text(name), .text(album.type.rawValue),
-             .optionalText(album.smartRulesJSON)])
+             .optionalText(album.smartRulesJSON), .optionalText(folderUUID?.uuidString)])
         return album
     }
 
@@ -81,6 +85,72 @@ struct AlbumStore: Sendable {
         try await db.execute("DELETE FROM albums WHERE uuid = ?", [.text(uuid.uuidString)])
         try await db.execute("DELETE FROM partition_checksums WHERE partition_key = ?",
                              [.text("album:\(uuid.uuidString)")])
+    }
+
+    /// Moves an album into a folder (nil = back to the top level).
+    func moveAlbum(_ uuid: UUID, toFolder folderUUID: UUID?) async throws {
+        try await db.execute("UPDATE albums SET folder_uuid = ? WHERE uuid = ?",
+                             [.optionalText(folderUUID?.uuidString), .text(uuid.uuidString)])
+    }
+
+    // MARK: - Folders
+
+    func folders() async throws -> [AlbumFolder] {
+        try await db.query("SELECT * FROM album_folders ORDER BY sort_index, name")
+            .map(Self.folder(from:))
+    }
+
+    @discardableResult
+    func createFolder(name: String, parent: UUID? = nil) async throws -> AlbumFolder {
+        let folder = AlbumFolder(uuid: UUID(), name: name,
+                                 parentFolderUUID: parent, sortIndex: 0)
+        try await db.execute(
+            "INSERT INTO album_folders(uuid, name, parent_folder_uuid) VALUES (?, ?, ?)",
+            [.text(folder.uuid.uuidString), .text(name),
+             .optionalText(parent?.uuidString)])
+        return folder
+    }
+
+    func renameFolder(_ uuid: UUID, to name: String) async throws {
+        try await db.execute("UPDATE album_folders SET name = ? WHERE uuid = ?",
+                             [.text(name), .text(uuid.uuidString)])
+    }
+
+    /// Deletes a folder like Apple Photos: all contained albums and subfolders
+    /// are deleted recursively (the photos themselves stay in the library).
+    /// Returns the deleted album UUIDs so callers can mark parquet dirty.
+    @discardableResult
+    func deleteFolderRecursively(_ uuid: UUID) async throws -> [UUID] {
+        let allFolders = try await folders()
+        // Collect this folder plus all descendant folder ids.
+        var folderIDs: [UUID] = [uuid]
+        var frontier: [UUID] = [uuid]
+        while !frontier.isEmpty {
+            let next = allFolders.filter { $0.parentFolderUUID.map(frontier.contains) ?? false }
+                .map(\.uuid)
+            folderIDs.append(contentsOf: next)
+            frontier = next
+        }
+        let idSet = Set(folderIDs)
+        let doomedAlbums = try await albums().filter { $0.folderUUID.map(idSet.contains) ?? false }
+        for album in doomedAlbums {
+            try await deleteAlbum(album.uuid)
+        }
+        // Deepest folders first so the CASCADE never needs to fire mid-loop.
+        for folderID in folderIDs.reversed() {
+            try await db.execute("DELETE FROM album_folders WHERE uuid = ?",
+                                 [.text(folderID.uuidString)])
+        }
+        return doomedAlbums.map(\.uuid)
+    }
+
+    static func folder(from row: SQLRow) -> AlbumFolder {
+        AlbumFolder(
+            uuid: UUID(uuidString: row.text("uuid") ?? "") ?? UUID(),
+            name: row.text("name") ?? "",
+            parentFolderUUID: row.text("parent_folder_uuid").flatMap(UUID.init(uuidString:)),
+            sortIndex: Int(row.int("sort_index") ?? 0)
+        )
     }
 
     // MARK: - Membership
@@ -128,7 +198,8 @@ struct AlbumStore: Sendable {
             type: AlbumType(rawValue: row.text("type") ?? "manual") ?? .manual,
             smartRulesJSON: row.text("smart_rules_json"),
             sortIndex: Int(row.int("sort_index") ?? 0),
-            coverAssetUUID: row.text("cover_asset_uuid").flatMap(UUID.init(uuidString:))
+            coverAssetUUID: row.text("cover_asset_uuid").flatMap(UUID.init(uuidString:)),
+            folderUUID: row.text("folder_uuid").flatMap(UUID.init(uuidString:))
         )
     }
 }

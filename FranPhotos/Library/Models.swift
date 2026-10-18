@@ -165,7 +165,19 @@ struct Album: Sendable, Equatable, Identifiable {
     var smartRulesJSON: String?
     var sortIndex: Int
     var coverAssetUUID: UUID?
+    /// Containing folder; nil = top level of My Albums.
+    var folderUUID: UUID?
 
+    var id: UUID { uuid }
+}
+
+/// A folder in My Albums containing albums and/or subfolders (like Apple
+/// Photos folders). Organizational metadata only — no parquet partition.
+struct AlbumFolder: Sendable, Equatable, Identifiable {
+    var uuid: UUID
+    var name: String
+    var parentFolderUUID: UUID?
+    var sortIndex: Int
     var id: UUID { uuid }
 }
 
