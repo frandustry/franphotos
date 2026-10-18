@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 
 extension Memory {
@@ -83,7 +84,9 @@ final class MemoryStore {
         var generated: [Memory] = []
         generated.append(contentsOf: Self.onThisDayMemories(from: assets, now: now))
         generated.append(contentsOf: Self.yearHighlightMemories(from: assets, now: now))
-        generated.append(contentsOf: Self.tripMemories(from: assets))
+        var trips = Self.tripMemories(from: assets)
+        await Self.applyGeocodedTitles(to: &trips, assets: assets)
+        generated.append(contentsOf: trips)
 
         let toStore = generated
         let metaKey = Self.metaKey
@@ -111,7 +114,7 @@ final class MemoryStore {
 
     /// "On This Day": assets captured on today's month-day, one memory per
     /// past year.
-    private static func onThisDayMemories(from assets: [Asset], now: Date) -> [Memory] {
+    static func onThisDayMemories(from assets: [Asset], now: Date) -> [Memory] {
         let cal = Calendar(identifier: .gregorian)
         let today = cal.dateComponents([.year, .month, .day], from: now)
         guard let thisYear = today.year, let month = today.month, let day = today.day else {
@@ -136,7 +139,7 @@ final class MemoryStore {
 
     /// "Year Highlights": per past year, the top 12 assets ranked by
     /// favorite/edit/location score, newest first on ties.
-    private static func yearHighlightMemories(from assets: [Asset], now: Date) -> [Memory] {
+    static func yearHighlightMemories(from assets: [Asset], now: Date) -> [Memory] {
         let cal = Calendar(identifier: .gregorian)
         let thisYear = cal.component(.year, from: now)
         var byYear: [Int: [Asset]] = [:]
@@ -168,7 +171,7 @@ final class MemoryStore {
 
     /// "Trips": runs of consecutive days (gap ≤ 2 days) whose assets share a
     /// rounded 1° lat/lon cell. A trip needs ≥ 3 assets spanning ≥ 2 days.
-    private static func tripMemories(from assets: [Asset]) -> [Memory] {
+    static func tripMemories(from assets: [Asset]) -> [Memory] {
         struct Cell: Hashable { let lat: Int; let lon: Int }
         var byCell: [Cell: [Asset]] = [:]
         for asset in assets {
@@ -202,5 +205,55 @@ final class MemoryStore {
                             title: String(localized: "Trip"),
                             keyDate: run.first?.capturedAt,
                             assetUUIDs: run.map(\.uuid)))
+    }
+
+    // MARK: - Reverse-geocoded trip titles
+
+    /// Replaces generic "Trip" titles with the trip's locality name (Apple
+    /// Photos style: just the place, e.g. "Nanjing" / "南京"). Best-effort:
+    /// offline or rate-limited runs keep the generic title. Serialized with a
+    /// small pause because CLGeocoder rate-limits aggressive callers.
+    static func applyGeocodedTitles(to trips: inout [Memory], assets: [Asset]) async {
+        let assetsByID = Dictionary(assets.map { ($0.uuid, $0) },
+                                    uniquingKeysWith: { first, _ in first })
+        for index in trips.indices {
+            let coords: [(lat: Double, lon: Double)] = trips[index].assetUUIDs
+                .compactMap { assetsByID[$0] }
+                .compactMap { asset in
+                    guard let lat = asset.latitude, let lon = asset.longitude
+                    else { return nil }
+                    return (lat, lon)
+                }
+            guard !coords.isEmpty else { continue }
+            let meanLat = coords.map(\.lat).reduce(0, +) / Double(coords.count)
+            let meanLon = coords.map(\.lon).reduce(0, +) / Double(coords.count)
+            if let name = await reverseGeocodeLocality(latitude: meanLat,
+                                                       longitude: meanLon) {
+                trips[index].title = name
+            }
+            try? await Task.sleep(nanoseconds: 150_000_000)
+        }
+    }
+
+    /// One reverse-geocode lookup with a 5 s timeout; returns the finest
+    /// usable administrative name.
+    static func reverseGeocodeLocality(latitude: Double,
+                                       longitude: Double) async -> String? {
+        await withTaskGroup(of: String?.self) { group in
+            group.addTask {
+                let location = CLLocation(latitude: latitude, longitude: longitude)
+                guard let placemarks = try? await CLGeocoder()
+                    .reverseGeocodeLocation(location) else { return nil }
+                let pm = placemarks.first
+                return pm?.locality ?? pm?.subAdministrativeArea
+                    ?? pm?.administrativeArea ?? pm?.name
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                return nil
+            }
+            defer { group.cancelAll() }
+            return await group.next() ?? nil
+        }
     }
 }
