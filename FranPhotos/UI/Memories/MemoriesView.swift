@@ -89,17 +89,17 @@ private struct MemoryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ZStack {
-                Rectangle().fill(Color.secondary.opacity(0.12))
-                if let image {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
+            Rectangle().fill(Color.secondary.opacity(0.12))
+                .overlay {
+                    if let image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    }
                 }
-            }
-            .aspectRatio(4 / 3, contentMode: .fit)
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+                .aspectRatio(4 / 3, contentMode: .fit)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(alignment: .bottomLeading) {
                 Image(systemName: iconName)
                     .font(.caption.weight(.semibold))

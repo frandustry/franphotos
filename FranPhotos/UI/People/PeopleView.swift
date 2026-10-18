@@ -166,18 +166,19 @@ struct FaceThumbnail: View {
     @State private var image: NSImage?
 
     var body: some View {
-        ZStack {
-            Circle().fill(Color.secondary.opacity(0.15))
-            if let image {
-                Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
-            } else {
-                Image(systemName: "person.fill").foregroundStyle(.tertiary)
+        Circle().fill(Color.secondary.opacity(0.15))
+            .overlay {
+                if let image {
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    Image(systemName: "person.fill").foregroundStyle(.tertiary)
+                }
             }
-        }
-        .task(id: thumbnailRelpath) {
-            guard let thumbnailRelpath, let paths else { return }
-            image = NSImage(contentsOf: paths.url(forRelativePath: thumbnailRelpath))
-        }
+            .clipShape(Circle())
+            .task(id: thumbnailRelpath) {
+                guard let thumbnailRelpath, let paths else { return }
+                image = NSImage(contentsOf: paths.url(forRelativePath: thumbnailRelpath))
+            }
     }
 }
 

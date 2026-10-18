@@ -42,24 +42,34 @@ struct AssetThumbnailView: View {
 
     @ViewBuilder
     private var sizedContent: some View {
+        // The clip MUST be applied outside the frame: clipping inside the
+        // ZStack clips to the image's leaked natural-size bounds instead of
+        // the square cell (proven with a standalone harness).
         if let size {
-            cellContent.frame(width: size, height: size)
+            cellContent
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
         } else {
-            cellContent.aspectRatio(1, contentMode: .fit)
+            cellContent
+                .aspectRatio(1, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
         }
     }
 
     private var cellContent: some View {
         ZStack {
+            // The image lives in an overlay of the flexible placeholder so its
+            // natural size can never inflate the cell's reported bounds.
             placeholder
-            if let image {
-                // NOTE: .scaledToFill() leaks the image's natural size through
-                // fixed frames on this SDK (proven with a standalone harness);
-                // the explicit .aspectRatio(contentMode:) form does not.
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            }
+                .overlay {
+                    if let image {
+                        // NOTE: .scaledToFill() leaks the image's natural size
+                        // on this SDK; the explicit aspectRatio form does not.
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    }
+                }
             if let controller, controller.hasVideo {
                 VideoLayerView(player: controller.player)
                     .opacity(controller.videoLayerOpacity)
@@ -68,7 +78,6 @@ struct AssetThumbnailView: View {
             }
             badges
         }
-        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
     }
 
     private var placeholder: some View {

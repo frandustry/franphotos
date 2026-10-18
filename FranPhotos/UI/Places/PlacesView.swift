@@ -168,17 +168,17 @@ private struct MapThumbnailView: View {
     @State private var image: NSImage?
 
     var body: some View {
-        ZStack {
-            Rectangle().fill(Color.secondary.opacity(0.15))
-            if let image {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+        Rectangle().fill(Color.secondary.opacity(0.15))
+            .overlay {
+                if let image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                }
             }
-        }
-        .clipped()
-        .task(id: asset.editVersion) {
-            image = await cache.image(for: asset, size: .thumb)
-        }
+            .clipped()
+            .task(id: asset.editVersion) {
+                image = await cache.image(for: asset, size: .thumb)
+            }
     }
 }
